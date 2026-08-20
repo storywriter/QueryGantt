@@ -62,6 +62,14 @@
                                                 <span aria-hidden="true" class="left-icon flex-noshrink fabric-icon ms-Icon--Refresh medium"></span>
                                             </span>
                                         </button>
+                                        <select class="querygantt-tab__zoom-select margin-left-8" aria-label="Zoom preset" title="Zoom preset"
+                                                data-bind="value: zoomPreset, event: { change: applyZoomPreset }">
+                                            <option value="custom" disabled>Custom</option>
+                                            <option value="fit">Fit all</option>
+                                            <option value="month">Month</option>
+                                            <option value="week">Week</option>
+                                            <option value="day">Day</option>
+                                        </select>
                                         <button class="bolt-header-command-item-button bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment margin-left-8" tabindex="0" type="button" title="Zoom out"
                                                 data-bind="click: zoomOut">
                                             <span class="fluent-icons-enabled">
@@ -129,10 +137,12 @@
                                                     icons: icons, 
                                                     showFields: showFields,
                                                     dateGranularity: dateGranularity,
+                                                    zoomView: zoomView,
                                                     callbacks: {
                                                         openNewWindow: openNewWindow.bind($root),
                                                         updateWit: updateWit.bind($root),
-                                                        reorderWit: reorderWit.bind($root)
+                                                        reorderWit: reorderWit.bind($root),
+                                                        zoomChanged: zoomChanged.bind($root)
                                                     },
                                                     actions: {
                                                         expand: _timeline_expandAction,
@@ -142,6 +152,7 @@
                                                         zoomOut: _timeline_zoomOutAction,
                                                         zoomIn: _timeline_zoomInAction,
                                                         zoomReset: _timeline_zoomResetAction,
+                                                        setZoomPreset: _timeline_setZoomPresetAction,
                                                         focus: _timeline_focusAction,
                                                         close: _timeline_closeAction,
                                                         refresh: _timeline_refreshAction,
