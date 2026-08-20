@@ -268,6 +268,21 @@ const commonServiceIds = {
     HostNavigationService: "navigation",
     HostPageLayoutService: "layout"
 };
+const workItemTrackingApi = { WorkItemTrackingRestClient: function WorkItemTrackingRestClient() {} };
+const updatedWorkItems = [];
+const workItemClient = {
+    updateWorkItem: function (patch, id, bypassRules, suppressNotifications) {
+        updatedWorkItems.push({ patch: patch, id: id, bypassRules: bypassRules, suppressNotifications: suppressNotifications });
+        return Promise.resolve();
+    }
+};
+const appApi = {
+    CommonServiceIds: commonServiceIds,
+    getClient: function (clientType) {
+        assert.strictEqual(clientType, workItemTrackingApi.WorkItemTrackingRestClient);
+        return workItemClient;
+    }
+};
 const sdk = {
     init: function () {},
     ready: function () { return Promise.resolve(); },
@@ -293,8 +308,8 @@ const appLoader = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     module: { config: function () { return { priorities: [], fields: [] }; } },
     knockout: appKnockout,
     sdk: sdk,
-    "api/index": { CommonServiceIds: commonServiceIds },
-    "api/WorkItemTracking/index": {},
+    "api/index": appApi,
+    "api/WorkItemTracking/index": workItemTrackingApi,
     "api/Work/index": {},
     "services/data": { getManager: function () { return Promise.resolve(startupSettingsManager); } },
     "services/backlog-order": backlogOrderService,
@@ -330,6 +345,36 @@ appLoader.result.Model.prototype.init = function () { return Promise.resolve(); 
     assert.strictEqual(openedPanel.options.configuration.dateGranularity, "day", "the configuration panel should receive the current granularity");
     openedPanel.options.onClose({ fieldsValue: ["dates"], dateGranularity: "time" });
     assert.strictEqual(startupModel.dateGranularity(), "time", "closing the panel should update the live timeline setting");
+
+    const movedStart = new Date(2026, 7, 21, 0, 0, 0, 0);
+    const movedEnd = new Date(2026, 7, 22, 0, 0, 0, 0);
+    const expectedTarget = new Date(movedEnd.getTime());
+    expectedTarget.setDate(expectedTarget.getDate() - 1);
+    await startupModel.updateWit({ id: 101, start: movedStart, end: movedEnd, state: null });
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(updatedWorkItems[0])), {
+        patch: [{
+            op: "replace",
+            path: "/fields/Microsoft.VSTS.Scheduling.StartDate",
+            value: movedStart.toISOString()
+        }, {
+            op: "replace",
+            path: "/fields/Microsoft.VSTS.Scheduling.TargetDate",
+            value: expectedTarget.toISOString()
+        }],
+        id: 101,
+        bypassRules: false,
+        suppressNotifications: false
+    }, "a dragged full-day range should write its inclusive Target Date without an off-by-one day");
+
+    await startupModel.updateWit({ id: 102, start: movedStart, end: movedStart, state: null });
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(updatedWorkItems[1].patch)), [{
+        op: "remove",
+        path: "/fields/Microsoft.VSTS.Scheduling.StartDate"
+    }, {
+        op: "replace",
+        path: "/fields/Microsoft.VSTS.Scheduling.TargetDate",
+        value: movedStart.toISOString()
+    }], "moving a target-only marker should keep it as a marker on the selected calendar day");
 
     console.log("querygantt date granularity integration tests passed");
 })().catch((error) => {
