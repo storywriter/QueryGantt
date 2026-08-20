@@ -12,6 +12,7 @@ define([
     "api/Work/index",
     "services/data",
     "services/backlog-order",
+    "services/date-granularity",
     "services/icon",
     "my/templates/gantt",
     "my/components/legend",
@@ -20,7 +21,7 @@ define([
     "my/components/message",
     "my/components/filter",
     "my/components/zerodata"
-], function (module, require, polyfills, ko, bindings, sdk, xlsx, domtoimage, api, witApi, workApi, dataService, backlogOrderService, iconService, ganttTemplate) {
+], function (module, require, polyfills, ko, bindings, sdk, xlsx, domtoimage, api, witApi, workApi, dataService, backlogOrderService, dateGranularityService, iconService, ganttTemplate) {
     //#region [ Fields ]
 
     const global = (function () { return this; })();
@@ -56,6 +57,7 @@ define([
         this.zero = ko.observable(null);
 
         this.showFields = ko.observableArray(Array.isArray(args.showFields) ? args.showFields : ["duration"]).extend({ rateLimit: { timeout: 1000, method: "notifyWhenChangesStop" } });
+        this.dateGranularity = ko.observable(dateGranularityService.normalize(args.dateGranularity));
 
         this.isLoading = ko.observable(true);
         this.types = ko.observableArray([]);
@@ -652,6 +654,7 @@ define([
     Model.prototype.openSettings = function () {
         const fields = this.fields();
         const fieldsValue = this.showFields();
+        const dateGranularity = this.dateGranularity();
 
         sdk.getService(api.CommonServiceIds.HostPageLayoutService).then((host) => {
             host.openPanel(`${sdk.getExtensionContext().id}.#{Extension.Id}#-configuration`, {
@@ -659,12 +662,18 @@ define([
                 lightDismiss: false,
                 configuration: {
                     fields,
-                    fieldsValue
+                    fieldsValue,
+                    dateGranularity
                 },
                 onClose: (result = {}) => {
                     if (Array.isArray(result.fieldsValue)) {
                         this.showFields(result.fieldsValue);
                         this.settings.showFields = result.fieldsValue;
+                    }
+                    if (result.dateGranularity) {
+                        const dateGranularity = dateGranularityService.normalize(result.dateGranularity);
+                        this.dateGranularity(dateGranularity);
+                        this.settings.dateGranularity = dateGranularity;
                     }
                 }
             });
@@ -1214,6 +1223,7 @@ define([
                 let orderMode = backlogOrderService.queryOrder;
                 let parsedSettings = {};
                 let team = null;
+                let dateGranularity = null;
 
                 try {
                     team = sdk.getTeamContext();
@@ -1230,6 +1240,9 @@ define([
                         }
                         if (parsedSettings.orderMode === backlogOrderService.backlogOrder) {
                             orderMode = backlogOrderService.backlogOrder;
+                        }
+                        if (parsedSettings.dateGranularity) {
+                            dateGranularity = parsedSettings.dateGranularity;
                         }
                     } 
                     catch (error) {
@@ -1255,7 +1268,8 @@ define([
                     orderMode,
                     manager,
                     settings: parsedSettings,
-                    settingsKey: `gantt_${project.id}`
+                    settingsKey: `gantt_${project.id}`,
+                    dateGranularity
                 });
                 console.debug("QueryGanttTabApp : ready() : %o", model);
                 

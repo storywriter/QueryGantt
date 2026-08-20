@@ -1,8 +1,9 @@
 define([
     "knockout",
+    "services/date-granularity",
     "vis-timeline",
     "vis-timeline-arrow"
-], function (ko, VisTimeline) {
+], function (ko, dateGranularityService, VisTimeline) {
     //#region [ Fields ]
     
     let global = (function() { return this; })();
@@ -34,6 +35,7 @@ define([
         this.typesOther = ko.isObservable(args.typesOther) ? args.typesOther : ko.observable(args.typesOther || []);
         this.icons = ko.isObservable(args.icons) ? args.icons : ko.observable(args.icons || []);
         this.showFields = ko.isObservableArray(args.showFields) ? args.showFields : ko.observableArray(args.showFields || []);
+        this.dateGranularity = ko.isObservable(args.dateGranularity) ? args.dateGranularity : ko.observable(dateGranularityService.normalize(args.dateGranularity));
         this.selectedItem = ko.isObservable(args.selectedItem) ? args.selectedItem : ko.observable(args.selectedItem || null);
         this.selectedItemId = ko.isObservable(args.selectedItemId) ? args.selectedItemId : ko.observable(args.selectedItemId || null);
 
@@ -720,6 +722,7 @@ define([
         var icons = this.icons();
         var showFields = this.showFields();
         var backlogOrder = this.backlogOrder();
+        var dateGranularity = dateGranularityService.normalize(this.dateGranularity());
         var now = new Date();
 
         this._createStyles(types, typesOther);
@@ -738,7 +741,7 @@ define([
                     return null;
                 }
 
-                return createGroup(wit, items, now);
+                return createGroup(wit, items, now, dateGranularity);
             })
             .filter((group) => group !== null);
 
@@ -749,7 +752,7 @@ define([
         
         // Create items
         var records = items
-            .map((wit) => createRecord(wit, now))
+            .map((wit) => createRecord(wit, now, dateGranularity))
             .filter((record) => record !== null);
 
         // Options for the Timeline
@@ -789,6 +792,10 @@ define([
             onMove: (record, callback) => updateWit(this, record, callback)
             //template: function (item, element, data) { return '<h1>' + item.header + data.moving?' '+ data.start:'' + '</h1><p>' + item.description + '</p>'; }
         };
+
+        if (dateGranularity === dateGranularityService.day) {
+            options.snap = dateGranularityService.startOfDay;
+        }
 
         this.groups = new VisTimeline.DataSet(groups);
         this.records = new VisTimeline.DataSet(records);
@@ -890,7 +897,7 @@ define([
      * @param {array} items List of all work items. 
      * @param {number} now Current date. 
      */
-    let createGroup = function (wit, items, now) {
+    let createGroup = function (wit, items, now, dateGranularity) {
         var group = {
             id: wit.id,
             originalId: wit.originalId,
@@ -914,7 +921,7 @@ define([
             type: wit.type,
             state: wit.state,
             priority: wit.priority,
-            duration: getDuration(wit),
+            duration: getDuration(wit, dateGranularity),
             selected: false,
             tags: wit.tags,
             startDate: wit.startDate,
@@ -939,18 +946,15 @@ define([
      * Creates record for the current work item.
      * 
      * @param {object} wit Current work item. 
-     * @param {number} now Current time in milliseconds.
+     * @param {Date} now Current date.
      */
-    let createRecord = function (wit, now) {
+    let createRecord = function (wit, now, dateGranularity) {
         var subtitle = [
             getFormattedDate(wit.startDate) || "×",
             getFormattedDate(wit.targetDate) || "×"
         ];
 
-        // Ensure dates
-        let start = wit.startDate || wit.targetDate || now;
-        let end = new Date((wit.targetDate || wit.startDate || now).getTime());
-        end.setDate(end.getDate() + 1);
+        const range = dateGranularityService.getTimelineRange(wit.startDate, wit.targetDate, now, dateGranularity);
 
         return {
             id: wit.id,
@@ -966,8 +970,8 @@ define([
             content: isMarker(wit) ? wit.title : wit.childCount ? `${wit.childCompletedCount}/${wit.childCount} (${Math.ceil((wit.childCompletedCount/wit.childCount) * 100)}%)` : "&nbsp;",
             selectable: true,
             type: isMarker(wit) ? "box" : "range",
-            start,
-            end: isMarker(wit) ? start : end
+            start: range.start,
+            end: isMarker(wit) ? range.start : range.end
         };
     };
 
@@ -1151,20 +1155,8 @@ define([
      * 
      * @param {object} wit Work item.
      */
-    let getDuration = function (wit) {
-        if (!wit.startDate || !wit.targetDate) {
-            return 0;
-        }
-
-        // Check dates
-        var startTime = wit.startDate.getTime();
-        var targetTime = wit.targetDate.getTime();
-
-        if (startTime > targetTime) {
-            return 0;
-        }
-
-        return Math.ceil((targetTime - startTime) / (1000 * 60 * 60 * 24)) + 1;
+    let getDuration = function (wit, dateGranularity) {
+        return dateGranularityService.getDuration(wit.startDate, wit.targetDate, dateGranularity);
     };
 
 
