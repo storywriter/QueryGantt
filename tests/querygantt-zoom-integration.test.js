@@ -32,12 +32,15 @@ const knockout = {
     applyBindings: function () {}
 };
 
-const loadService = function () {
+const loadService = function (name) {
     let result = null;
-    const filename = path.join(__dirname, "../js/services/timeline-zoom.js");
+    const filename = path.join(__dirname, "../js/services/" + name + ".js");
     const source = fs.readFileSync(filename, "utf8");
     vm.runInNewContext(source, {
         Date: Date,
+        Map: Map,
+        Number: Number,
+        Set: Set,
         define: function (dependencies, factory) { result = factory(); },
         isNaN: isNaN
     }, { filename: path.basename(filename) });
@@ -86,13 +89,17 @@ const loadAmd = function (filename, dependencies, exposeModel) {
         Number: Number,
         Promise: Promise,
         Set: Set,
+        Event: function Event(type) { this.type = type; },
+        clearTimeout: clearTimeout,
         console: { debug: function () {}, log: function () {}, warn: function () {} },
         define: function (names, factory) {
             result = factory.apply(null, names.map(function (name) { return dependencies[name] || {}; }));
         },
         document: document,
         fetch: function () { throw new Error("Unexpected fetch"); },
-        isNaN: isNaN
+        isNaN: isNaN,
+        requestAnimationFrame: function (callback) { callback(); },
+        setTimeout: setTimeout
     }, { filename: path.basename(filename) });
 
     return {
@@ -109,7 +116,9 @@ const plain = function (value) {
     return JSON.parse(JSON.stringify(value));
 };
 
-const zoomService = loadService();
+const zoomService = loadService("timeline-zoom");
+const dateGranularityService = loadService("date-granularity");
+const backlogOrderService = loadService("backlog-order");
 
 let timelineRegistration = null;
 const timelineKnockout = Object.assign({}, knockout, {
@@ -137,6 +146,7 @@ const TimelineStub = function () {
     };
     this.handlers = {};
     this.selection = [];
+    this.options = arguments[3] || {};
     latestTimeline = this;
 };
 TimelineStub.prototype.getWindow = function () {
@@ -161,11 +171,53 @@ TimelineStub.prototype.focus = function () {};
 TimelineStub.prototype.getSelection = function () { return this.selection; };
 TimelineStub.prototype.setSelection = function (selection) { this.selection = selection; };
 TimelineStub.prototype.on = function (name, callback) { this.handlers[name] = callback; };
+TimelineStub.prototype.off = function (name, callback) {
+    if (this.handlers[name] === callback) {
+        delete this.handlers[name];
+    }
+};
+TimelineStub.prototype.setOptions = function (options) {
+    Object.assign(this.options, options);
+    if (this.handlers.changed) {
+        this.handlers.changed();
+    }
+};
 TimelineStub.prototype.emit = function (name, value) { this.handlers[name](value); };
 TimelineStub.prototype.destroy = function () {};
 
+const createTimelineElement = function () {
+    const scroller = {
+        scrollTop: 0,
+        dispatchCount: 0,
+        dispatchEvent: function () { this.dispatchCount += 1; }
+    };
+    const dropZone = {
+        addEventListener: function () {},
+        removeEventListener: function () {},
+        classList: { add: function () {}, remove: function () {} }
+    };
+    const chart = {
+        querySelector: function (selector) {
+            return selector === ".vis-left.vis-vertical-scroll" ? scroller : null;
+        }
+    };
+    const root = {
+        classList: { add: function () {}, remove: function () {} },
+        querySelectorAll: function () { return []; },
+        querySelector: function (selector) {
+            return selector === ".my-timeline__root-drop-zone" ? dropZone : chart;
+        }
+    };
+    return {
+        element: { firstChild: root, querySelector: function () {} },
+        chart: chart,
+        scroller: scroller
+    };
+};
+
 loadAmd(path.join(__dirname, "../js/components/timeline.js"), {
     knockout: timelineKnockout,
+    "services/date-granularity": dateGranularityService,
     "services/timeline-zoom": zoomService,
     "vis-timeline": { DataSet: DataSet, Timeline: TimelineStub },
     "vis-timeline-arrow": function () {}
@@ -205,6 +257,7 @@ const makeItem = function () {
 const zoomChanges = [];
 const restoredStart = "2026-08-18T00:00:00.000Z";
 const restoredEnd = "2026-08-25T00:00:00.000Z";
+const timelineElement = createTimelineElement();
 const timelineViewModel = timelineRegistration.viewModel.createViewModel({
     items: observable([makeItem()]),
     states: observable([]),
@@ -218,7 +271,7 @@ const timelineViewModel = timelineRegistration.viewModel.createViewModel({
         zoomChanged: function (view) { zoomChanges.push(view); }
     },
     actions: {}
-}, { element: { querySelector: function () {}, firstChild: {} } });
+}, timelineElement);
 
 timelineViewModel._onItemsChanged();
 assert.strictEqual(latestTimeline.window.start.toISOString(), restoredStart, "the saved visible start should be restored after the initial fit");
@@ -275,6 +328,8 @@ const appModule = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     module: { config: function () { return { priorities: [], fields: [] }; } },
     knockout: knockout,
     sdk: {},
+    "services/backlog-order": backlogOrderService,
+    "services/date-granularity": dateGranularityService,
     "services/timeline-zoom": zoomService
 }, true).result;
 const appModel = new appModule.Model({
@@ -310,12 +365,14 @@ const configurationModule = loadAmd(path.join(__dirname, "../js/querygantt-confi
     knockout: knockout,
     sdk: {},
     "api/index": { CommonServiceIds: {} },
-    "services/data": { getManager: function () { return Promise.resolve(configurationManager); } }
+    "services/data": { getManager: function () { return Promise.resolve(configurationManager); } },
+    "services/date-granularity": dateGranularityService
 }, true).result;
 const configurationModel = new configurationModule.Model({
     project: { id: "project-id" },
     fields: [],
     fieldsValue: ["dates", "duration"],
+    dateGranularity: "day",
     panel: { close: function (result) { panelResult = result; } }
 });
 
@@ -359,12 +416,37 @@ const startupLoader = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"
     sdk: startupSdk,
     "api/index": { CommonServiceIds: commonServiceIds },
     "api/WorkItemTracking/index": {},
+    "api/Work/index": {},
     "services/data": { getManager: function () { return Promise.resolve(startupManager); } },
+    "services/backlog-order": backlogOrderService,
+    "services/date-granularity": dateGranularityService,
     "services/timeline-zoom": zoomService
 }, true);
 startupLoader.result.Model.prototype.init = function () { return Promise.resolve(); };
 
 (async function () {
+    assert.strictEqual(latestTimeline.options.verticalScroll, true, "the combined timeline should keep internal vertical scrolling enabled");
+    assert.strictEqual(latestTimeline.options.maxHeight, "max(12rem, calc(100vh - 16rem))", "the combined timeline should keep its bounded height");
+    assert.deepStrictEqual(plain(latestTimeline.options.orientation), { axis: "both", item: "top" });
+
+    timelineElement.scroller.scrollTop = 600;
+    const rendered = await timelineViewModel.exportImage(function (node) {
+        assert.strictEqual(node, timelineElement.chart, "PNG rendering should receive the complete timeline chart node");
+        assert.strictEqual(latestTimeline.options.maxHeight, "", "PNG rendering should temporarily remove the height cap");
+        return Promise.resolve("image");
+    });
+    assert.strictEqual(rendered, "image");
+    assert.strictEqual(latestTimeline.options.maxHeight, "max(12rem, calc(100vh - 16rem))");
+    assert.strictEqual(timelineElement.scroller.scrollTop, 600, "successful PNG rendering should restore vertical scroll");
+
+    timelineElement.scroller.scrollTop = 900;
+    await assert.rejects(
+        timelineViewModel.exportImage(function () { return Promise.reject(new Error("intentional renderer failure")); }),
+        /intentional renderer failure/
+    );
+    assert.strictEqual(latestTimeline.options.maxHeight, "max(12rem, calc(100vh - 16rem))");
+    assert.strictEqual(timelineElement.scroller.scrollTop, 900, "failed PNG rendering should also restore vertical scroll");
+
     await appModel.zoomChanged({
         preset: "custom",
         start: "2026-08-20T00:00:00.000Z",
@@ -385,10 +467,29 @@ startupLoader.result.Model.prototype.init = function () { return Promise.resolve
         options: { scopeType: "User" }
     }, "zoom saves should merge the latest settings and leave other queries and features untouched");
 
+    const orderSave = appModel._saveOrderMode("query");
+    const secondZoomSave = appModel.zoomChanged({
+        preset: "day",
+        start: "2026-08-21T00:00:00.000Z",
+        end: "2026-08-22T00:00:00.000Z"
+    });
+    await Promise.all([orderSave, secondZoomSave]);
+
+    const combinedSettings = JSON.parse(persisted);
+    assert.strictEqual(writes.length, 3, "queued order and zoom updates should both be persisted");
+    assert.strictEqual(combinedSettings.orderMode, "query", "the order update should survive a simultaneous zoom save");
+    assert.strictEqual(combinedSettings.dateGranularity, "day", "queued saves should retain the date granularity");
+    assert.deepStrictEqual(plain(combinedSettings.zoomViews), {
+        "other-query": { preset: "month", start: "2026-01-01T00:00:00.000Z", end: "2026-01-31T00:00:00.000Z" },
+        "query-a": { preset: "day", start: "2026-08-21T00:00:00.000Z", end: "2026-08-22T00:00:00.000Z" }
+    }, "queued saves should preserve other queries and apply the latest current-query zoom");
+
     await configurationModel.save();
-    assert.deepStrictEqual(plain(configurationWrite.value.zoomViews), plain(writes[0].value.zoomViews), "saving visible fields should preserve every query's zoom setting");
+    assert.deepStrictEqual(plain(configurationWrite.value.zoomViews), plain(combinedSettings.zoomViews), "saving visible fields should preserve every query's zoom setting");
+    assert.strictEqual(configurationWrite.value.orderMode, "query");
     assert.deepStrictEqual(plain(configurationWrite.value.showFields), ["dates", "duration"]);
-    assert.deepStrictEqual(plain(panelResult), { fieldsValue: ["dates", "duration"] });
+    assert.strictEqual(configurationWrite.value.dateGranularity, "day");
+    assert.deepStrictEqual(plain(panelResult), { fieldsValue: ["dates", "duration"], dateGranularity: "day" });
 
     startupLoader.runReady();
     await new Promise(function (resolve) { setImmediate(resolve); });

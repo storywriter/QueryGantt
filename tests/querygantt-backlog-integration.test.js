@@ -55,6 +55,12 @@ const observable = function (initial) {
 };
 
 const backlogOrderService = loadBacklogService();
+const dateGranularityService = {
+    normalize: function (value) { return value === "day" ? "day" : "time"; }
+};
+const timelineZoomService = {
+    serializeView: function (value) { return value; }
+};
 const workApi = { WorkRestClient: function WorkRestClient() {} };
 let workClient = null;
 const api = {
@@ -70,7 +76,9 @@ const app = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     sdk: {},
     "api/index": api,
     "api/Work/index": workApi,
-    "services/backlog-order": backlogOrderService
+    "services/backlog-order": backlogOrderService,
+    "services/date-granularity": dateGranularityService,
+    "services/timeline-zoom": timelineZoomService
 });
 const Model = app.Model;
 let settingsManager = null;
@@ -81,7 +89,8 @@ const configurationApp = loadAmd(path.join(__dirname, "../js/querygantt-configur
     "api/index": { CommonServiceIds: {} },
     "services/data": {
         getManager: function () { return Promise.resolve(settingsManager); }
-    }
+    },
+    "services/date-granularity": dateGranularityService
 });
 
 const backlogs = [
@@ -105,6 +114,7 @@ const makeModel = function () {
     model.orderMode = observable(backlogOrderService.queryOrder);
     model.message = observable("");
     model.isLoading = observable(false);
+    model._settingsSavePromise = Promise.resolve();
     return model;
 };
 
@@ -185,26 +195,40 @@ const makeModel = function () {
     assert.strictEqual(refreshed, 1, "a failed request should not refresh an uncommitted order");
 
     let saved = null;
+    let persisted = JSON.stringify({
+        showFields: ["duration"],
+        dateGranularity: "day",
+        zoomViews: { "query-a": { preset: "week" } }
+    });
     model.manager = {
+        getValue: function () { return Promise.resolve(persisted); },
         setValue: function (key, value, options) {
+            persisted = value;
             saved = { key: key, value: JSON.parse(value), options: options };
             return Promise.resolve();
         }
     };
     model.settingsKey = "gantt_project-id";
-    model.settings = { showFields: ["duration"] };
-    model._saveOrderMode(backlogOrderService.backlogOrder);
-    await Promise.resolve();
+    model.settings = { showFields: ["stale-value"] };
+    await model._saveOrderMode(backlogOrderService.backlogOrder);
     assert.deepStrictEqual(JSON.parse(JSON.stringify(saved)), {
         key: "gantt_project-id",
-        value: { showFields: ["duration"], orderMode: "backlog" },
+        value: {
+            showFields: ["duration"],
+            dateGranularity: "day",
+            zoomViews: { "query-a": { preset: "week" } },
+            orderMode: "backlog"
+        },
         options: { scopeType: "User" }
-    }, "display order should be merged into the existing per-user/project settings");
+    }, "display order should merge the latest settings without losing date or zoom preferences");
 
     let configurationSaved = null;
     let panelResult = null;
     settingsManager = {
-        getValue: function () { return Promise.resolve(JSON.stringify({ orderMode: "backlog" })); },
+        getValue: function () { return Promise.resolve(JSON.stringify({
+            orderMode: "backlog",
+            zoomViews: { "query-a": { preset: "week" } }
+        })); },
         setValue: function (key, value, options) {
             configurationSaved = { key: key, value: JSON.parse(value), options: options };
             return Promise.resolve();
@@ -213,14 +237,23 @@ const makeModel = function () {
     const configurationModel = Object.create(configurationApp.Model.prototype);
     configurationModel.project = { id: "project-id" };
     configurationModel.fieldsValue = observable(["dates", "duration"]);
+    configurationModel.dateGranularity = observable("time");
     configurationModel.panel = { close: function (result) { panelResult = result; } };
     await configurationModel.save();
     assert.deepStrictEqual(JSON.parse(JSON.stringify(configurationSaved)), {
         key: "gantt_project-id",
-        value: { orderMode: "backlog", showFields: ["dates", "duration"] },
+        value: {
+            orderMode: "backlog",
+            zoomViews: { "query-a": { preset: "week" } },
+            showFields: ["dates", "duration"],
+            dateGranularity: "time"
+        },
         options: { scopeType: "User" }
-    }, "saving field visibility should preserve the selected backlog order");
-    assert.deepStrictEqual(JSON.parse(JSON.stringify(panelResult)), { fieldsValue: ["dates", "duration"] });
+    }, "saving configuration should preserve backlog order and query zoom views");
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(panelResult)), {
+        fieldsValue: ["dates", "duration"],
+        dateGranularity: "time"
+    });
 
     console.log("querygantt backlog integration tests passed");
 })().catch((error) => {

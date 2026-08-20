@@ -15,6 +15,8 @@ const observable = function (initial) {
     };
     result.__observable = true;
     result.extend = function () { return result; };
+    result.peek = function () { return initial; };
+    result.subscribe = function () { return { dispose: function () {} }; };
     result.dispose = function () {};
     return result;
 };
@@ -30,12 +32,15 @@ const knockout = {
     applyBindings: function () {}
 };
 
-const loadService = function () {
+const loadService = function (name) {
     let result = null;
-    const filename = path.join(__dirname, "../js/services/date-granularity.js");
+    const filename = path.join(__dirname, "../js/services/" + name + ".js");
     const source = fs.readFileSync(filename, "utf8");
     vm.runInNewContext(source, {
         Date: Date,
+        Map: Map,
+        Number: Number,
+        Set: Set,
         define: function (dependencies, factory) { result = factory(); },
         isNaN: isNaN
     }, { filename: path.basename(filename) });
@@ -102,7 +107,9 @@ const loadAmd = function (filename, dependencies, exposeModel) {
     };
 };
 
-const dateGranularityService = loadService();
+const dateGranularityService = loadService("date-granularity");
+const backlogOrderService = loadService("backlog-order");
+const timelineZoomService = loadService("timeline-zoom");
 
 let timelineRegistration = null;
 let timelineCaptures = [];
@@ -124,14 +131,46 @@ DataSet.prototype.getIds = function () { return this.data.map((item) => item.id)
 DataSet.prototype.update = function () {};
 
 const TimelineStub = function (node, records, groups, options) {
+    this.window = {
+        start: new Date("2026-08-01T00:00:00.000Z"),
+        end: new Date("2026-09-01T00:00:00.000Z")
+    };
     timelineCaptures.push({ node: node, records: records, groups: groups, options: options });
 };
 TimelineStub.prototype.on = function () {};
 TimelineStub.prototype.destroy = function () {};
+TimelineStub.prototype.getWindow = function () {
+    return { start: new Date(this.window.start), end: new Date(this.window.end) };
+};
+TimelineStub.prototype.setWindow = function (start, end) {
+    if (arguments.length === 1) {
+        end = start.end;
+        start = start.start;
+    }
+    this.window = { start: new Date(start), end: new Date(end) };
+};
+
+const createTimelineElement = function () {
+    const dropZone = {
+        addEventListener: function () {},
+        removeEventListener: function () {},
+        classList: { add: function () {}, remove: function () {} }
+    };
+    const chart = { querySelector: function () { return null; } };
+    const root = {
+        classList: { add: function () {}, remove: function () {} },
+        querySelectorAll: function () { return []; },
+        querySelector: function (selector) {
+            return selector === ".my-timeline__root-drop-zone" ? dropZone : chart;
+        }
+    };
+    return { element: { firstChild: root, querySelector: function () {} } };
+};
 
 loadAmd(path.join(__dirname, "../js/components/timeline.js"), {
     knockout: timelineKnockout,
     "services/date-granularity": dateGranularityService,
+    "services/timeline-zoom": timelineZoomService,
     "vis-timeline": { DataSet: DataSet, Timeline: TimelineStub },
     "vis-timeline-arrow": function () {}
 }, false);
@@ -178,7 +217,7 @@ const timelineViewModel = timelineRegistration.viewModel.createViewModel({
     showFields: observable([]),
     dateGranularity: granularity,
     actions: {}
-}, { element: { querySelector: function () {}, firstChild: {} } });
+}, createTimelineElement());
 
 timelineViewModel._onItemsChanged();
 let capture = timelineCaptures[timelineCaptures.length - 1];
@@ -256,8 +295,11 @@ const appLoader = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     sdk: sdk,
     "api/index": { CommonServiceIds: commonServiceIds },
     "api/WorkItemTracking/index": {},
+    "api/Work/index": {},
     "services/data": { getManager: function () { return Promise.resolve(startupSettingsManager); } },
-    "services/date-granularity": dateGranularityService
+    "services/backlog-order": backlogOrderService,
+    "services/date-granularity": dateGranularityService,
+    "services/timeline-zoom": timelineZoomService
 }, true);
 appLoader.result.Model.prototype.init = function () { return Promise.resolve(); };
 

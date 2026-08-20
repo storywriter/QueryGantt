@@ -51,7 +51,7 @@ define([
         this.settingsKey = args.settingsKey || null;
         this.settings = args.settings && (typeof(args.settings) === "object") && !Array.isArray(args.settings) ? args.settings : {};
         this.zoomSettingsKey = ((this.query || {}).id || (this.query || {}).name || "default") + "";
-        this._zoomSavePromise = Promise.resolve();
+        this._settingsSavePromise = Promise.resolve();
 
         this.token = null;
         this.path = null;
@@ -760,18 +760,17 @@ define([
     //#region [ Methods : Private ]
 
     /**
-     * Persists the current query's zoom view without overwriting other settings.
+     * Serializes settings writes and merges each update into the latest stored value.
      *
-     * @param {object} view Zoom view.
+     * @param {function} update Applies the requested change to the settings object.
+     * @param {string} warning Warning shown when persistence fails.
      */
-    Model.prototype._saveZoomView = function (view) {
+    Model.prototype._updateSettings = function (update, warning) {
         if (!this.manager || !this.settingsKey) {
             return Promise.resolve(false);
         }
 
-        const serializedView = timelineZoomService.serializeView(view);
-
-        this._zoomSavePromise = this._zoomSavePromise
+        this._settingsSavePromise = this._settingsSavePromise
             .catch(() => false)
             .then(() => this.manager.getValue(this.settingsKey, { scopeType: "User" }))
             .then((value) => {
@@ -785,22 +784,36 @@ define([
                 catch (error) {
                 }
 
-                if (!settings.zoomViews || (typeof(settings.zoomViews) !== "object") || Array.isArray(settings.zoomViews)) {
-                    settings.zoomViews = {};
-                }
-
-                settings.zoomViews[this.zoomSettingsKey] = serializedView;
+                update(settings);
                 this.settings = settings;
                 return this.manager.setValue(this.settingsKey, JSON.stringify(settings), { scopeType: "User" });
             })
             .then(() => true)
             .catch((error) => {
-                console.warn("App : Unable to save the timeline zoom view.");
+                console.warn(warning);
                 console.warn(error);
                 return false;
             });
 
-        return this._zoomSavePromise;
+        return this._settingsSavePromise;
+    };
+
+
+    /**
+     * Persists the current query's zoom view without overwriting other settings.
+     *
+     * @param {object} view Zoom view.
+     */
+    Model.prototype._saveZoomView = function (view) {
+        const serializedView = timelineZoomService.serializeView(view);
+
+        return this._updateSettings((settings) => {
+            if (!settings.zoomViews || (typeof(settings.zoomViews) !== "object") || Array.isArray(settings.zoomViews)) {
+                settings.zoomViews = {};
+            }
+
+            settings.zoomViews[this.zoomSettingsKey] = serializedView;
+        }, "App : Unable to save the timeline zoom view.");
     };
 
     /**
@@ -1203,17 +1216,9 @@ define([
      * @param {string} value Selected order mode.
      */
     Model.prototype._saveOrderMode = function(value) {
-        if (!this.manager || !this.settingsKey) {
-            return;
-        }
-
-        this.settings.orderMode = value;
-        this.manager
-            .setValue(this.settingsKey, JSON.stringify(this.settings), { scopeType: "User" })
-            .catch((error) => {
-                console.warn("App : _saveOrderMode() : Unable to save display order.");
-                console.warn(error);
-            });
+        return this._updateSettings((settings) => {
+            settings.orderMode = value;
+        }, "App : _saveOrderMode() : Unable to save display order.");
     };
 
 
