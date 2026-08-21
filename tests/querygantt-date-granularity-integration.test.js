@@ -156,10 +156,12 @@ const TimelineStub = function (node, records, groups, options) {
         start: new Date("2026-08-01T00:00:00.000Z"),
         end: new Date("2026-09-01T00:00:00.000Z")
     };
-    timelineCaptures.push({ node: node, records: records, groups: groups, options: options });
+    this.setOptionsCalls = [];
+    timelineCaptures.push({ node: node, records: records, groups: groups, options: options, instance: this });
 };
 TimelineStub.prototype.on = function () {};
 TimelineStub.prototype.destroy = function () {};
+TimelineStub.prototype.setOptions = function (options) { this.setOptionsCalls.push(options); };
 TimelineStub.prototype.getWindow = function () {
     return { start: new Date(this.window.start), end: new Date(this.window.end) };
 };
@@ -171,14 +173,14 @@ TimelineStub.prototype.setWindow = function (start, end) {
     this.window = { start: new Date(start), end: new Date(end) };
 };
 
-const createTimelineElement = function () {
+const createTimelineElement = function (chartWidth) {
     const dropZone = {
         addEventListener: function () {},
         removeEventListener: function () {},
         classList: { add: function () {}, remove: function () {}, contains: function () { return false; } },
         style: {}
     };
-    const chart = { clientWidth: 1200, querySelector: function () { return null; } };
+    const chart = { clientWidth: chartWidth || 1200, querySelector: function () { return null; } };
     const root = {
         classList: { add: function () {}, remove: function () {} },
         querySelectorAll: function () { return []; },
@@ -188,7 +190,7 @@ const createTimelineElement = function () {
             return selector === ".my-timeline__root-drop-zone" ? dropZone : chart;
         }
     };
-    return { element: { firstChild: root, querySelector: function () {} } };
+    return { element: { firstChild: root, querySelector: function () {} }, chart: chart };
 };
 
 loadAmd(path.join(__dirname, "../js/components/timeline.js"), {
@@ -231,6 +233,7 @@ const makeItem = function (id, hour, minute) {
 };
 
 const granularity = observable("day");
+const timelineElement = createTimelineElement();
 const timelineViewModel = timelineRegistration.viewModel.createViewModel({
     items: observable([makeItem(1, 1, 20), makeItem(2, 23, 50)]),
     states: observable([]),
@@ -241,7 +244,7 @@ const timelineViewModel = timelineRegistration.viewModel.createViewModel({
     showFields: observable([]),
     dateGranularity: granularity,
     actions: {}
-}, createTimelineElement());
+}, timelineElement);
 
 timelineViewModel._onItemsChanged();
 let capture = timelineCaptures[timelineCaptures.length - 1];
@@ -251,6 +254,9 @@ assert.strictEqual(capture.groups.data[0].duration, 1);
 assert.strictEqual(typeof capture.options.snap, "function", "day mode should configure day snapping");
 assert.strictEqual(capture.options.snap(new Date(2026, 7, 21, 18, 30)).getHours(), 0);
 assert.strictEqual(capture.options.zoomMin, dateGranularityService.getZoomMin("day", 1200), "day mode should stop before vis-timeline switches to an hour axis");
+timelineElement.chart.clientWidth = 1800;
+timelineViewModel._resizeTimeline();
+assert.strictEqual(capture.instance.setOptionsCalls[0].zoomMin, dateGranularityService.getZoomMin("day", 1800), "the day cap should follow host panel resizes");
 assert.strictEqual(capture.options.verticalScroll, false, "work items should use the page's full-height scroll area");
 assert.deepStrictEqual(JSON.parse(JSON.stringify(capture.options.orientation)), { axis: "top", item: "top" }, "only the floating top date axis should be rendered");
 

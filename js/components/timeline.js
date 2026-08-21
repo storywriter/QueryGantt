@@ -54,6 +54,7 @@ define([
         this._onBacklogPointerMoveBound = this._onBacklogPointerMove.bind(this);
         this._onBacklogPointerUpBound = this._onBacklogPointerUp.bind(this);
         this._syncFloatingAxisBound = this._syncFloatingAxis.bind(this);
+        this._resizeTimelineBound = this._resizeTimeline.bind(this);
         this._timelineChangedBound = () => this._syncFloatingAxis(true);
         this.scrollContainer = typeof(this.root.closest) === "function" ? this.root.closest(".v-scroll-auto") : null;
         this.floatingAxis = global.document.createElement("div");
@@ -66,7 +67,7 @@ define([
             this.scrollContainer.addEventListener("scroll", this._syncFloatingAxisBound, false);
         }
         if (typeof(global.addEventListener) === "function") {
-            global.addEventListener("resize", this._syncFloatingAxisBound, false);
+            global.addEventListener("resize", this._resizeTimelineBound, false);
         }
 
         // Callbacks
@@ -356,7 +357,7 @@ define([
             this.scrollContainer.removeEventListener("scroll", this._syncFloatingAxisBound, false);
         }
         if (typeof(global.removeEventListener) === "function") {
-            global.removeEventListener("resize", this._syncFloatingAxisBound, false);
+            global.removeEventListener("resize", this._resizeTimelineBound, false);
         }
         if (this.floatingAxis && this.floatingAxis.parentNode) {
             this.floatingAxis.parentNode.removeChild(this.floatingAxis);
@@ -367,6 +368,21 @@ define([
 
 
     //#region [ Methods : Private ]
+
+    /**
+     * Keeps both the floating axis geometry and the Day zoom cap correct after
+     * Azure DevOps resizes the extension host.
+     */
+    Timeline.prototype._resizeTimeline = function () {
+        this._syncFloatingAxis();
+        if (!this.timeline || dateGranularityService.normalize(this.dateGranularity()) !== dateGranularityService.day) {
+            return;
+        }
+
+        this.timeline.setOptions({
+            zoomMin: dateGranularityService.getZoomMin(dateGranularityService.day, this.node.clientWidth)
+        });
+    };
 
     /**
      * Create styles for the input types.
