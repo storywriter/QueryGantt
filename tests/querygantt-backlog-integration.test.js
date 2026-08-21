@@ -61,6 +61,13 @@ const dateGranularityService = {
 const timelineZoomService = {
     serializeView: function (value) { return value; }
 };
+const browserWrites = [];
+const browserSettingsService = {
+    write: function (extensionId, projectId, name, queryId, value) {
+        browserWrites.push({ extensionId, projectId, name, queryId, value });
+        return true;
+    }
+};
 const workApi = { WorkRestClient: function WorkRestClient() {} };
 let workClient = null;
 const api = {
@@ -77,6 +84,7 @@ const app = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     "api/index": api,
     "api/Work/index": workApi,
     "services/backlog-order": backlogOrderService,
+    "services/browser-settings": browserSettingsService,
     "services/date-granularity": dateGranularityService,
     "services/timeline-zoom": timelineZoomService
 });
@@ -90,6 +98,7 @@ const configurationApp = loadAmd(path.join(__dirname, "../js/querygantt-configur
     "services/data": {
         getManager: function () { return Promise.resolve(settingsManager); }
     },
+    "services/browser-settings": browserSettingsService,
     "services/date-granularity": dateGranularityService
 });
 
@@ -125,6 +134,9 @@ const makeModel = function () {
             assert.deepStrictEqual(JSON.parse(JSON.stringify(context)), { projectId: "project-id", teamId: "team-id" });
             return Promise.resolve(backlogs);
         },
+        getBacklogConfigurations: function () {
+            return Promise.resolve({ backlogFields: { typeFields: { Order: "Microsoft.VSTS.Common.StackRank" } } });
+        },
         getBacklogLevelWorkItems: function (context, backlogId) {
             fetchedBacklogs.push(backlogId);
             return Promise.resolve(responses[backlogId]);
@@ -149,6 +161,7 @@ const makeModel = function () {
     const raceModel = makeModel();
     workClient = {
         getBacklogs: function () { return delayedBacklogs; },
+        getBacklogConfigurations: function () { return Promise.resolve({ backlogFields: { typeFields: { Order: "Microsoft.VSTS.Common.StackRank" } } }); },
         getBacklogLevelWorkItems: function (context, backlogId) { return Promise.resolve(responses[backlogId]); }
     };
     const currentLoad = raceModel._loadBacklogOrder(null);
@@ -236,6 +249,8 @@ const makeModel = function () {
     };
     const configurationModel = Object.create(configurationApp.Model.prototype);
     configurationModel.project = { id: "project-id" };
+    configurationModel.extensionId = "publisher.internal";
+    configurationModel.browserStorage = {};
     configurationModel.fieldsValue = observable(["dates", "duration"]);
     configurationModel.dateGranularity = observable("time");
     configurationModel.panel = { close: function (result) { panelResult = result; } };
@@ -245,8 +260,7 @@ const makeModel = function () {
         value: {
             orderMode: "backlog",
             zoomViews: { "query-a": { preset: "week" } },
-            showFields: ["dates", "duration"],
-            dateGranularity: "time"
+            showFields: ["dates", "duration"]
         },
         options: { scopeType: "User" }
     }, "saving configuration should preserve backlog order and query zoom views");
@@ -254,6 +268,13 @@ const makeModel = function () {
         fieldsValue: ["dates", "duration"],
         dateGranularity: "time"
     });
+    assert.deepStrictEqual(browserWrites.pop(), {
+        extensionId: "publisher.internal",
+        projectId: "project-id",
+        name: "dateGranularity",
+        queryId: null,
+        value: "time"
+    }, "granularity should be stored in the current browser rather than team-wide Extension Data");
 
     console.log("querygantt backlog integration tests passed");
 })().catch((error) => {

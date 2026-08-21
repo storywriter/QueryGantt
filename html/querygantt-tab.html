@@ -11,7 +11,7 @@
             <div class="page-content flex-column flex-grow">
                 <my-spinner params="isVisible: isLoading"></my-spinner>
                 <my-message params="text: message"></my-message>
-                <div class="flex-row margin-top-16" style="display: none; position: sticky; top: 0; z-index: 3" data-bind="visible: (wits().length || zero() !== null) && !isLoading()">
+                <div class="querygantt-tab__filter flex-row margin-top-16" style="display: none; position: sticky; top: 0; z-index: 3" data-bind="visible: (wits().length || zero() !== null) && !isLoading()">
                     <my-filter params="value: filter,
                                        valuePrimary: filterPrimary,
                                        queryType: queryType,
@@ -49,7 +49,7 @@
                                 <div class="bolt-header-commandbar bolt-button-group flex-row justify-end">
                                     <div class="bolt-header-commandbar-button-group flex-row flex-center scroll-hidden">
                                         <label class="querygantt-tab__order-selector flex-row flex-center" data-bind="attr: { title: backlogOrderTitle }">
-                                            <span>Order:</span>
+                                            <span>Sort:</span>
                                             <select aria-label="Gantt display order" data-bind="value: orderMode">
                                                 <option value="query">Query order</option>
                                                 <option value="backlog">Backlog order</option>
@@ -65,10 +65,11 @@
                                         <select class="querygantt-tab__zoom-select margin-left-8" aria-label="Zoom preset" title="Zoom preset"
                                                 data-bind="value: zoomPreset, event: { change: applyZoomPreset }">
                                             <option value="custom" disabled>Custom</option>
-                                            <option value="fit">Fit all</option>
-                                            <option value="month">Month</option>
-                                            <option value="week">Week</option>
-                                            <option value="day">Day</option>
+                                            <option value="100">100%</option>
+                                            <option value="200">200%</option>
+                                            <option value="300">300%</option>
+                                            <option value="400">400%</option>
+                                            <option value="500">500%</option>
                                         </select>
                                         <button class="bolt-header-command-item-button bolt-button bolt-icon-button enabled subtle icon-only bolt-focus-treatment margin-left-8" tabindex="0" type="button" title="Zoom out"
                                                 data-bind="click: zoomOut">

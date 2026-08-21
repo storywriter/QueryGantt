@@ -24,33 +24,37 @@ The branch starts from `info-emait/QueryGantt@54f4cdb` (`v1.5.2`). The PR change
 
 The commit IDs differ because the changes were replayed onto one branch and integration conflicts were resolved there.
 
-Two additional stabilization commits apply only to the combined branch:
+Two additional stabilization commits were initially added on the combined branch:
 
 - `bcda4dc` serializes and merges settings updates so backlog order, date granularity, and zoom settings do not overwrite one another. It also adds combined-behavior tests.
-- `b2c95d9` prevents duplicate initial query/backlog loads caused by eager Knockout computed evaluation and adds startup and day-drag boundary tests.
+- `b2c95d9` prevents duplicate initial query/backlog loads caused by eager Knockout computed evaluation and adds startup and day-drag boundary tests. This startup fix is also carried by each focused PR branch so any PR can be tested independently.
+
+The current branch tip adds the production-feedback hardening described below. The relevant parts are also carried by their focused PR branches rather than requiring this integration branch to be merged.
 
 ## Integration decisions
 
-- Keep vis-timeline's internal vertical scrolling and bounded height from #31. PNG export temporarily expands the chart and restores both height and scroll position on success or failure.
-- Keep backlog drag/drop behavior from #33 while rendering only the timeline chart, not its surrounding controls, in PNG exports.
-- Store backlog order, date granularity, and zoom in the existing shared settings object. Every partial update reads, merges, and serializes the complete object before saving it.
+- Let the Azure DevOps page scroll the naturally expanded Work Item rows. Only the top date axis is rendered; a read-only fixed mirror keeps it below the sticky filter after its original position scrolls away. PNG export renders the already expanded timeline without changing the user's scroll state.
+- Use pointer-driven backlog drag handling so vis-timeline's gesture handling cannot swallow native drag events. Query items omitted from the Backlog API, including completed items, are associated with their process-specific Order field and remain eligible for reorder operations.
+- Keep visible columns and backlog sort mode in Azure Extension Data as before. Keep timeline granularity and zoom in browser-local storage, scoped by extension, project, and (for zoom) query, so public/internal installations and different queries do not overwrite each other.
+- Define zoom presets as data-relative magnifications: `100%` fits all data, while `200%` through `500%` show progressively smaller windows. Arbitrary wheel/pinch/button zoom is stored as `Custom`.
+- In `Day` granularity, set a width-aware `zoomMin` so vis-timeline cannot switch to an hour/minute axis. `Hours and minutes` retains the original unrestricted behavior.
 - Observe backlog order, date granularity, and zoom together when constructing or updating the timeline.
 
 If the four PRs are merged separately, the suggested order is #31, #33, #35, then #37. The two integration-only commits above should then be reviewed and adapted to the resulting upstream state. This branch should not be merged wholesale without that review, especially if `main` has moved beyond `v1.5.2`.
 
 ## Validation
 
-Last rerun on 2026-08-21:
+Last rerun on 2026-08-22:
 
-- `npm test`: all 7 Node test suites passed.
-- `TZ=America/New_York node tests/date-granularity.test.js`: passed.
-- `TZ=America/New_York node tests/querygantt-date-granularity-integration.test.js`: passed.
-- `npx grunt app-build:Debug`: passed, including JSHint for 36 files.
-- `npx grunt app-build:Release`: passed, including JSHint for 36 files.
-- Browser checks against the actual Release-built component and bundled vis-timeline/dom-to-image libraries: 31 checks passed (10 header/PNG, 8 backlog ordering, 6 date granularity, and 7 zoom).
+- `npm test`: all 9 Node test suites passed.
+- Date-granularity unit and integration suites passed under both `America/New_York` and `Asia/Tokyo` time zones.
+- `npx grunt app-build:Debug`: passed, including JSHint for 37 files.
+- `npx grunt app-build:Release`: passed, including JSHint for 37 files, CSS minification, and JavaScript minification.
+- Browser checks against the actual Release-built component and bundled vis-timeline 8.5.0: all 12 integrated checks passed with zero console errors.
+- Real pointer input was used to verify both completed-item sibling reordering and cross-level Parent reassignment. The latter produced the expected `inside` reorder plan.
 
-The combined checks cover settings coexistence, per-query zoom restoration, inclusive target dates for day-granularity drag updates, milestone updates, startup duplicate-load prevention, and PNG height/scroll restoration after both success and failure.
+The combined checks cover natural page scrolling, the floating top-only axis, completed-item pointer drag, percentage zoom behavior, day/time axis limits, browser-local persistence, visible-column persistence precedence, startup duplicate-load prevention, and naturally expanded PNG export.
 
 ## Remaining live-environment check
 
-The browser checks exercise the Release build with the bundled vis-timeline 8.5.0 and dom-to-image 2.6.0, but they do not authenticate to a real Azure DevOps organization. Before publication, a live smoke test should still confirm team-context discovery, backlog loading and reorder writes, and rendering inside the Azure DevOps host iframe and active theme.
+The browser checks exercise the Release build but do not authenticate to a real Azure DevOps organization. Before publication, a live smoke test should still confirm the updated package inside the Azure DevOps host iframe, browser-local restoration after navigation/reload, and successful reorder writes for both active and completed Work Items in the target process/team.

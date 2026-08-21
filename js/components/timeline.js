@@ -8,7 +8,6 @@ define([
     //#region [ Fields ]
     
     let global = (function() { return this; })();
-    const maxHeight = "max(12rem, calc(100vh - 16rem))";
 
     //#endregion
 
@@ -17,8 +16,6 @@ define([
     
     /**
      * Constructor.
-     * 
-     * VERTICAL SCROLL: require(["knockout"], (ko) => ko.contextFor(temp2).$data.timeline.setOptions({verticalScroll: true, height: 200}))
      * 
      * @param {object} args Arguments.
      */
@@ -48,15 +45,29 @@ define([
         this.records = null;
         this.arrows = null;
         this._backlogDraggedId = null;
+        this._backlogPointerId = null;
+        this._backlogPointerHandle = null;
         this._pendingZoomPreset = null;
         this._ignoredRange = null;
-
-        this._onBacklogRootDragOverBound = this._onBacklogRootDragOver.bind(this);
-        this._onBacklogRootDragLeaveBound = this._onBacklogRootDragLeave.bind(this);
-        this._onBacklogRootDropBound = this._onBacklogRootDrop.bind(this);
-        this.rootDropZone.addEventListener("dragover", this._onBacklogRootDragOverBound, false);
-        this.rootDropZone.addEventListener("dragleave", this._onBacklogRootDragLeaveBound, false);
-        this.rootDropZone.addEventListener("drop", this._onBacklogRootDropBound, false);
+        this._fitRange = null;
+        this._initialZoomRestored = false;
+        this._onBacklogPointerMoveBound = this._onBacklogPointerMove.bind(this);
+        this._onBacklogPointerUpBound = this._onBacklogPointerUp.bind(this);
+        this._syncFloatingAxisBound = this._syncFloatingAxis.bind(this);
+        this._timelineChangedBound = () => this._syncFloatingAxis(true);
+        this.scrollContainer = typeof(this.root.closest) === "function" ? this.root.closest(".v-scroll-auto") : null;
+        this.floatingAxis = global.document.createElement("div");
+        this.floatingAxis.classList.add("my-timeline", "my-timeline__floating-axis");
+        this.floatingAxis.setAttribute("aria-hidden", "true");
+        if (global.document.body && typeof(global.document.body.appendChild) === "function") {
+            global.document.body.appendChild(this.floatingAxis);
+        }
+        if (this.scrollContainer && typeof(this.scrollContainer.addEventListener) === "function") {
+            this.scrollContainer.addEventListener("scroll", this._syncFloatingAxisBound, false);
+        }
+        if (typeof(global.addEventListener) === "function") {
+            global.addEventListener("resize", this._syncFloatingAxisBound, false);
+        }
 
         // Callbacks
         this.callbacks = args.callbacks;
@@ -199,7 +210,7 @@ define([
      * Resets zoom.
      */
     Timeline.prototype.zoomReset = function () {
-        this.setZoomPreset(timelineZoomService.fit);
+        this.setZoomPreset(timelineZoomService.percent100);
     };
 
 
@@ -221,12 +232,17 @@ define([
         this._pendingZoomPreset = preset;
         const before = this.timeline.getWindow();
 
-        if (preset === timelineZoomService.fit) {
+        if (preset === timelineZoomService.percent100) {
             this.timeline.fit({ animation: false });
+            this._fitRange = this.timeline.getWindow();
         }
         else {
             const center = new Date((before.start.getTime() + before.end.getTime()) / 2);
-            const range = timelineZoomService.getPresetWindow(preset, center);
+            const range = timelineZoomService.getPresetWindow(preset, this._fitRange, center);
+            if (!range) {
+                this._pendingZoomPreset = null;
+                return;
+            }
             this.timeline.setWindow(range.start, range.end, { animation: false });
         }
 
@@ -273,8 +289,7 @@ define([
 
 
     /**
-     * Runs an image renderer with the timeline expanded to include every row.
-     * Restores the capped height and vertical scroll position afterwards.
+     * Runs an image renderer against the naturally expanded timeline.
      *
      * @param {function} renderer Function that receives the timeline element and returns a promise.
      * @returns Promise containing the renderer result.
@@ -284,19 +299,7 @@ define([
             return Promise.reject(new Error("Timeline is not ready for image export."));
         }
 
-        const scrollContainer = this.node.querySelector(".vis-left.vis-vertical-scroll");
-        const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
-
-        return this._setOptionsAndWait({ maxHeight: "" })
-            .then(() => renderer(this.node))
-            .finally(() => this._setOptionsAndWait({ maxHeight: maxHeight })
-                .then(() => {
-                    const restoredScrollContainer = this.node.querySelector(".vis-left.vis-vertical-scroll");
-                    if (restoredScrollContainer) {
-                        restoredScrollContainer.scrollTop = scrollTop;
-                        restoredScrollContainer.dispatchEvent(new global.Event("scroll"));
-                    }
-                }));
+        return Promise.resolve().then(() => renderer(this.node));
     };
 
 
@@ -347,9 +350,17 @@ define([
 
         this._onItemsChangedSubscribe.dispose();
         this._onSelectedIdChangedSubscribe.dispose();
-        this.rootDropZone.removeEventListener("dragover", this._onBacklogRootDragOverBound, false);
-        this.rootDropZone.removeEventListener("dragleave", this._onBacklogRootDragLeaveBound, false);
-        this.rootDropZone.removeEventListener("drop", this._onBacklogRootDropBound, false);
+        this._clearBacklogDrag();
+        this._destroyTimeline();
+        if (this.scrollContainer && typeof(this.scrollContainer.removeEventListener) === "function") {
+            this.scrollContainer.removeEventListener("scroll", this._syncFloatingAxisBound, false);
+        }
+        if (typeof(global.removeEventListener) === "function") {
+            global.removeEventListener("resize", this._syncFloatingAxisBound, false);
+        }
+        if (this.floatingAxis && this.floatingAxis.parentNode) {
+            this.floatingAxis.parentNode.removeChild(this.floatingAxis);
+        }
     };
 
     //#endregion
@@ -416,6 +427,12 @@ define([
         this.records = null;
         this._pendingZoomPreset = null;
         this._ignoredRange = null;
+        this._fitRange = null;
+        this._initialZoomRestored = false;
+        if (this.floatingAxis) {
+            this.floatingAxis.classList.remove("my-timeline__floating-axis--visible");
+            this.floatingAxis.innerHTML = "";
+        }
     };
 
 
@@ -423,21 +440,31 @@ define([
      * Restores the last view after the timeline has fitted its items.
      */
     Timeline.prototype._restoreZoom = function () {
-        const value = (this.zoomView && typeof(this.zoomView.peek) === "function") ? this.zoomView.peek() : this.zoomView();
-        const view = timelineZoomService.normalizeView(value);
-
-        if (view.preset !== timelineZoomService.fit) {
-            let range = view.start && view.end ? view : null;
-            if (!range) {
-                const fitted = this.timeline.getWindow();
-                const center = new Date((fitted.start.getTime() + fitted.end.getTime()) / 2);
-                range = timelineZoomService.getPresetWindow(view.preset, center);
-            }
-
-            this.timeline.setWindow(range.start, range.end, { animation: false });
+        if (!this.timeline || this._initialZoomRestored) {
+            return;
         }
 
-        this._ignoredRange = this.timeline.getWindow();
+        const value = (this.zoomView && typeof(this.zoomView.peek) === "function") ? this.zoomView.peek() : this.zoomView();
+        const view = timelineZoomService.normalizeView(value);
+        // onInitialDrawComplete runs after vis-timeline has performed its own
+        // fit. That window is the authoritative 100% range.
+        this._fitRange = this.timeline.getWindow();
+        this._initialZoomRestored = true;
+
+        if (view.preset === timelineZoomService.custom && view.start && view.end) {
+            this._pendingZoomPreset = timelineZoomService.custom;
+            this._ignoredRange = { start: new Date(view.start), end: new Date(view.end) };
+            this.timeline.setWindow(view.start, view.end, { animation: false });
+        }
+        else if (view.preset !== timelineZoomService.percent100) {
+            const center = new Date((this._fitRange.start.getTime() + this._fitRange.end.getTime()) / 2);
+            const range = timelineZoomService.getPresetWindow(view.preset, this._fitRange, center);
+            if (range) {
+                this._pendingZoomPreset = view.preset;
+                this._ignoredRange = range;
+                this.timeline.setWindow(range.start, range.end, { animation: false });
+            }
+        }
     };
 
 
@@ -456,171 +483,202 @@ define([
                 && Math.abs(this._ignoredRange.end.getTime() - e.end.getTime()) <= 1;
             this._ignoredRange = null;
             if (matchesIgnored) {
+                this._pendingZoomPreset = null;
                 return;
             }
         }
 
-        const preset = this._pendingZoomPreset || timelineZoomService.identifyPreset(e.start, e.end);
+        const identifiedPreset = timelineZoomService.identifyPreset(e.start, e.end, this._fitRange);
+        // A directly selected percentage remains the selected preset even if
+        // zoomMin (Day granularity) has to clamp the requested window.
+        const preset = this._pendingZoomPreset || identifiedPreset;
         this._pendingZoomPreset = null;
         this.callback("zoomChanged", timelineZoomService.normalizeView({ preset, start: e.start, end: e.end }));
+        this._syncFloatingAxis(true);
     };
 
 
     /**
-     * Applies timeline options and waits until the resulting redraw completes.
-     *
-     * @param {object} options Timeline options.
-     * @returns Promise resolved after the redraw.
+     * Gets the viewport position immediately below the sticky filter bar.
      */
-    Timeline.prototype._setOptionsAndWait = function (options) {
-        return new Promise((resolve) => {
-            const timeline = this.timeline;
-            let timeout = null;
-            let done = false;
-            const finish = () => {
-                if (done) {
-                    return;
-                }
+    Timeline.prototype._getFloatingAxisTop = function () {
+        const filter = global.document.querySelector(".querygantt-tab__filter");
+        if (!filter || typeof(filter.getBoundingClientRect) !== "function") {
+            return 0;
+        }
 
-                done = true;
-                if (timeout) {
-                    global.clearTimeout(timeout);
-                }
-                timeline.off("changed", finish);
-                global.requestAnimationFrame(resolve);
-            };
-
-            timeline.on("changed", finish);
-            timeline.setOptions(options);
-            if (!done) {
-                timeout = global.setTimeout(finish, 100);
-            }
-        });
+        const bounds = filter.getBoundingClientRect();
+        return bounds.top <= 0 && bounds.bottom > 0 ? bounds.bottom : 0;
     };
 
 
     /**
-     * Starts dragging a row in backlog-order mode.
+     * Mirrors vis-timeline's top axis into a fixed, read-only layer while the
+     * page scrolls through naturally expanded work item rows. A DOM mirror is
+     * used because vis-timeline's required overflow containers prevent CSS
+     * position: sticky from working reliably.
      *
-     * @param {object} record Timeline group record.
-     * @param {DragEvent} e Drag event.
+     * @param {boolean} refreshContent Re-clone labels after range changes.
      */
-    Timeline.prototype._onBacklogDragStart = function (record, e) {
-        if (!this.backlogOrder() || !record.backlogEligible) {
-            e.preventDefault();
+    Timeline.prototype._syncFloatingAxis = function (refreshContent) {
+        if (!this.timeline || !this.floatingAxis || typeof(this.node.querySelector) !== "function") {
             return;
         }
 
-        this._backlogDraggedId = record.id;
-        this.root.classList.add("my-timeline--dragging");
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", record.originalId + "");
-        e.stopPropagation();
+        const axis = this.node.querySelector(".vis-panel.vis-top");
+        if (!axis || typeof(axis.getBoundingClientRect) !== "function" || typeof(this.node.getBoundingClientRect) !== "function") {
+            this.floatingAxis.classList.remove("my-timeline__floating-axis--visible");
+            return;
+        }
+
+        const axisBounds = axis.getBoundingClientRect();
+        const timelineBounds = this.node.getBoundingClientRect();
+        const top = this._getFloatingAxisTop();
+        const visible = axisBounds.top < top && timelineBounds.bottom > top + axisBounds.height;
+        if (!visible) {
+            this.floatingAxis.classList.remove("my-timeline__floating-axis--visible");
+            return;
+        }
+
+        if (refreshContent === true || !this.floatingAxis.firstChild) {
+            const clone = axis.cloneNode(true);
+            [clone].concat(Array.from(clone.querySelectorAll("[id]"))).forEach((element) => element.removeAttribute("id"));
+            clone.classList.add("my-timeline__floating-axis-content");
+            clone.style.position = "relative";
+            clone.style.top = "0";
+            clone.style.left = "0";
+            clone.style.width = axisBounds.width + "px";
+            clone.style.height = axisBounds.height + "px";
+            this.floatingAxis.innerHTML = "";
+            this.floatingAxis.appendChild(clone);
+        }
+
+        this.floatingAxis.style.top = top + "px";
+        this.floatingAxis.style.left = axisBounds.left + "px";
+        this.floatingAxis.style.width = axisBounds.width + "px";
+        this.floatingAxis.style.height = axisBounds.height + "px";
+        this.floatingAxis.classList.add("my-timeline__floating-axis--visible");
     };
 
 
     /**
-     * Finishes dragging a backlog row.
+     * Starts a pointer-driven row drag. vis-timeline handles mouse gestures on
+     * its root element, so native HTML Drag and Drop is unreliable inside the
+     * label panel. Pointer events are stopped at the handle and tracked by this
+     * component instead.
      */
-    Timeline.prototype._onBacklogDragEnd = function () {
+    Timeline.prototype._onBacklogPointerDown = function (record, handle, e) {
+        if (!this.backlogOrder() || !record.backlogEligible || (e.pointerType === "mouse" && e.button !== 0)) {
+            return;
+        }
+
         this._clearBacklogDrag();
+        this._backlogDraggedId = record.id;
+        this._backlogPointerId = e.pointerId;
+        this._backlogPointerHandle = handle;
+        this.root.classList.add("my-timeline--dragging");
+
+        const rootBounds = typeof(this.root.getBoundingClientRect) === "function" ? this.root.getBoundingClientRect() : { left: 0 };
+        this.rootDropZone.style.top = (this._getFloatingAxisTop() + 4) + "px";
+        this.rootDropZone.style.left = (rootBounds.left + 4) + "px";
+        if (typeof(global.document.addEventListener) === "function") {
+            global.document.addEventListener("pointermove", this._onBacklogPointerMoveBound, true);
+            global.document.addEventListener("pointerup", this._onBacklogPointerUpBound, true);
+            global.document.addEventListener("pointercancel", this._onBacklogPointerUpBound, true);
+        }
+
+        if (typeof(handle.setPointerCapture) === "function") {
+            try {
+                handle.setPointerCapture(e.pointerId);
+            }
+            catch (error) {
+            }
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof(e.stopImmediatePropagation) === "function") {
+            e.stopImmediatePropagation();
+        }
     };
 
 
     /**
-     * Shows the valid drop action over a backlog row.
-     *
-     * @param {object} target Target timeline group.
-     * @param {HTMLElement} element Target row element.
-     * @param {DragEvent} e Drag event.
+     * Updates the drop target beneath the active pointer.
      */
-    Timeline.prototype._onBacklogDragOver = function (target, element, e) {
-        const dragged = this.groups && this.groups.get(this._backlogDraggedId);
-        const position = this._getBacklogDropPosition(dragged, target, element, e);
-        this._clearBacklogDropClasses();
-
-        if (!position) {
-            e.dataTransfer.dropEffect = "none";
+    Timeline.prototype._onBacklogPointerMove = function (e) {
+        if (this._backlogDraggedId === null || e.pointerId !== this._backlogPointerId) {
             return;
         }
 
         e.preventDefault();
         e.stopPropagation();
-        e.dataTransfer.dropEffect = "move";
+        this._clearBacklogDropClasses();
+        this.rootDropZone.classList.remove("my-timeline__root-drop-zone--active");
+
+        const hit = global.document.elementFromPoint(e.clientX, e.clientY);
+        if (!hit || typeof(hit.closest) !== "function") {
+            return;
+        }
+
+        if (hit.closest(".my-timeline__root-drop-zone") === this.rootDropZone) {
+            this.rootDropZone.classList.add("my-timeline__root-drop-zone--active");
+            return;
+        }
+
+        const element = hit.closest(".my-timeline-group");
+        if (!element || !this.root.contains(element)) {
+            return;
+        }
+
+        const id = element.getAttribute("data-work-item-id");
+        const target = this.groups && (this.groups.get(id) || this.groups.get(Number(id)));
+        const dragged = this.groups && this.groups.get(this._backlogDraggedId);
+        const position = this._getBacklogDropPosition(dragged, target, element, e);
+        if (!position) {
+            return;
+        }
+
         element.classList.add(`my-timeline-group--drop-${position}`);
         element.setAttribute("data-backlog-drop-position", position);
     };
 
 
     /**
-     * Removes a row's drop indication after leaving it.
-     *
-     * @param {HTMLElement} element Target row element.
-     * @param {DragEvent} e Drag event.
+     * Commits the highlighted pointer drop, or cancels when no valid target is
+     * highlighted.
      */
-    Timeline.prototype._onBacklogDragLeave = function (element, e) {
-        if (e.relatedTarget && element.contains(e.relatedTarget)) {
-            return;
-        }
-        this._clearBacklogDropClasses();
-    };
-
-
-    /**
-     * Applies a drop on another backlog row.
-     *
-     * @param {object} target Target timeline group.
-     * @param {HTMLElement} element Target row element.
-     * @param {DragEvent} e Drag event.
-     */
-    Timeline.prototype._onBacklogDrop = function (target, element, e) {
-        const dragged = this.groups && this.groups.get(this._backlogDraggedId);
-        const position = element.getAttribute("data-backlog-drop-position") || this._getBacklogDropPosition(dragged, target, element, e);
-        if (!position) {
+    Timeline.prototype._onBacklogPointerUp = function (e) {
+        if (this._backlogDraggedId === null || e.pointerId !== this._backlogPointerId) {
             return;
         }
 
         e.preventDefault();
         e.stopPropagation();
-        this._runBacklogMove(target.id, position);
-    };
-
-
-    /**
-     * Enables dropping a dragged row at the root of its backlog level.
-     */
-    Timeline.prototype._onBacklogRootDragOver = function (e) {
-        const dragged = this.groups && this.groups.get(this._backlogDraggedId);
-        if (!dragged || !dragged.backlogEligible) {
+        if (e.type === "pointercancel") {
+            this._clearBacklogDrag();
             return;
         }
 
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = "move";
-        this.rootDropZone.classList.add("my-timeline__root-drop-zone--active");
-    };
-
-
-    /**
-     * Clears the root drop indication after leaving it.
-     */
-    Timeline.prototype._onBacklogRootDragLeave = function () {
-        this.rootDropZone.classList.remove("my-timeline__root-drop-zone--active");
-    };
-
-
-    /**
-     * Moves a dragged row to the root of its backlog level.
-     */
-    Timeline.prototype._onBacklogRootDrop = function (e) {
-        if (this._backlogDraggedId === null) {
+        if (this.rootDropZone.classList.contains("my-timeline__root-drop-zone--active")) {
+            this._runBacklogMove(null, "root");
             return;
         }
 
-        e.preventDefault();
-        e.stopPropagation();
-        this._runBacklogMove(null, "root");
+        const element = this.root.querySelector("[data-backlog-drop-position]");
+        if (!element) {
+            this._clearBacklogDrag();
+            return;
+        }
+
+        const id = element.getAttribute("data-work-item-id");
+        const target = this.groups && (this.groups.get(id) || this.groups.get(Number(id)));
+        if (!target) {
+            this._clearBacklogDrag();
+            return;
+        }
+
+        this._runBacklogMove(target.id, element.getAttribute("data-backlog-drop-position"));
     };
 
 
@@ -670,9 +728,29 @@ define([
      * Clears drag state and all drop indicators.
      */
     Timeline.prototype._clearBacklogDrag = function () {
+        if (typeof(global.document.removeEventListener) === "function") {
+            global.document.removeEventListener("pointermove", this._onBacklogPointerMoveBound, true);
+            global.document.removeEventListener("pointerup", this._onBacklogPointerUpBound, true);
+            global.document.removeEventListener("pointercancel", this._onBacklogPointerUpBound, true);
+        }
+        if (this._backlogPointerHandle && this._backlogPointerId !== null
+            && typeof(this._backlogPointerHandle.releasePointerCapture) === "function") {
+            try {
+                if (typeof(this._backlogPointerHandle.hasPointerCapture) !== "function"
+                    || this._backlogPointerHandle.hasPointerCapture(this._backlogPointerId)) {
+                    this._backlogPointerHandle.releasePointerCapture(this._backlogPointerId);
+                }
+            }
+            catch (error) {
+            }
+        }
         this._backlogDraggedId = null;
+        this._backlogPointerId = null;
+        this._backlogPointerHandle = null;
         this.root.classList.remove("my-timeline--dragging");
         this.rootDropZone.classList.remove("my-timeline__root-drop-zone--active");
+        this.rootDropZone.style.top = "";
+        this.rootDropZone.style.left = "";
         this._clearBacklogDropClasses();
     };
 
@@ -861,15 +939,14 @@ define([
             },
             groupHeightMode: "fixed",
             orientation: {
-                axis: "both",
+                axis: "top",
                 // Long schedules should open at the first work item.
                 item: "top"
             },
             horizontalScroll: true,
-            verticalScroll: true,
-            // Keep the time axes visible by letting vis-timeline scroll long
-            // schedules inside the space left below the page controls.
-            maxHeight: maxHeight,
+            // Let the Azure DevOps page scroll all work item rows. The top axis
+            // is mirrored by _syncFloatingAxis while its original scrolls out.
+            verticalScroll: false,
             zoomKey: "ctrlKey",
             editable: {
                 remove: false,
@@ -878,12 +955,20 @@ define([
             },
             groupTemplate: (record, element) => createGroupTemplate(this, record, element, states, priorities, types, typesOther, icons, showFields, backlogOrder),
             visibleFrameTemplate: (record, element) => createVisibleFrameTemplate(this, record, element),
-            onMove: (record, callback) => updateWit(this, record, callback)
+            onMove: (record, callback) => updateWit(this, record, callback),
+            // Restore browser-local zoom only after vis-timeline has completed
+            // its automatic initial fit; its earlier default window is not the
+            // data-relative 100% range.
+            onInitialDrawComplete: () => {
+                this._restoreZoom();
+                this._syncFloatingAxis(true);
+            }
             //template: function (item, element, data) { return '<h1>' + item.header + data.moving?' '+ data.start:'' + '</h1><p>' + item.description + '</p>'; }
         };
 
         if (dateGranularity === dateGranularityService.day) {
             options.snap = dateGranularityService.startOfDay;
+            options.zoomMin = dateGranularityService.getZoomMin(dateGranularity, this.node.clientWidth);
         }
 
         this.groups = new VisTimeline.DataSet(groups);
@@ -891,7 +976,6 @@ define([
 
         // Create an Timeline
         this.timeline = new VisTimeline.Timeline(this.node, this.records, this.groups, options);
-        this._restoreZoom();
         
         // Create an Arrow
         const dependencies = items
@@ -919,6 +1003,9 @@ define([
         this.timeline.on("select", this._onSelect.bind(this));
         this.timeline.on("doubleClick", this._onDoubleClick.bind(this));
         this.timeline.on("rangechanged", this._onRangeChanged.bind(this));
+        this.timeline.on("rangechange", this._timelineChangedBound);
+        this.timeline.on("changed", this._timelineChangedBound);
+        this._syncFloatingAxis(true);
     };
 
 
@@ -1098,7 +1185,7 @@ define([
 
         if (backlogOrder && record.backlogEligible) {
             result.unshift(
-                `<div class="my-timeline-group__button my-timeline-group__button--drag fluent-icons-enabled text-center" title="Drag to reorder in the team backlog" draggable="true" data-noexport="true">
+                `<div class="my-timeline-group__button my-timeline-group__button--drag fluent-icons-enabled text-center" title="Drag to reorder in the team backlog" role="button" aria-label="Drag to reorder in the team backlog" data-noexport="true">
                     <span aria-hidden="true" class="flex-noshrink fabric-icon ms-Icon--GripperDotsVertical large"></span>
                  </div>`
             );
@@ -1194,11 +1281,7 @@ define([
 
         const dragHandle = el.querySelector(".my-timeline-group__button--drag");
         if (dragHandle) {
-            dragHandle.addEventListener("dragstart", vm._onBacklogDragStart.bind(vm, record), false);
-            dragHandle.addEventListener("dragend", vm._onBacklogDragEnd.bind(vm), false);
-            el.addEventListener("dragover", vm._onBacklogDragOver.bind(vm, record, el), false);
-            el.addEventListener("dragleave", vm._onBacklogDragLeave.bind(vm, el), false);
-            el.addEventListener("drop", vm._onBacklogDrop.bind(vm, record, el), false);
+            dragHandle.addEventListener("pointerdown", vm._onBacklogPointerDown.bind(vm, record, dragHandle), false);
         }
 
         return el;

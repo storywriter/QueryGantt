@@ -12,6 +12,7 @@ define([
     "api/Work/index",
     "services/data",
     "services/backlog-order",
+    "services/browser-settings",
     "services/date-granularity",
     "services/timeline-zoom",
     "services/icon",
@@ -22,7 +23,7 @@ define([
     "my/components/message",
     "my/components/filter",
     "my/components/zerodata"
-], function (module, require, polyfills, ko, bindings, sdk, xlsx, domtoimage, api, witApi, workApi, dataService, backlogOrderService, dateGranularityService, timelineZoomService, iconService, ganttTemplate) {
+], function (module, require, polyfills, ko, bindings, sdk, xlsx, domtoimage, api, witApi, workApi, dataService, backlogOrderService, browserSettingsService, dateGranularityService, timelineZoomService, iconService, ganttTemplate) {
     //#region [ Fields ]
 
     const global = (function () { return this; })();
@@ -51,6 +52,8 @@ define([
         this.settingsKey = args.settingsKey || null;
         this.settings = args.settings && (typeof(args.settings) === "object") && !Array.isArray(args.settings) ? args.settings : {};
         this.zoomSettingsKey = ((this.query || {}).id || (this.query || {}).name || "default") + "";
+        this.extensionId = args.extensionId || "querygantt";
+        this.browserStorage = args.browserStorage || null;
         this._settingsSavePromise = Promise.resolve();
 
         this.token = null;
@@ -241,6 +244,7 @@ define([
                         completedWork: (wit.fields["Microsoft.VSTS.Scheduling.CompletedWork"] || 0),
                         remainingWork: (wit.fields["Microsoft.VSTS.Scheduling.RemainingWork"] || 0),
                         effort: (wit.fields["Microsoft.VSTS.Scheduling.Effort"] || 0),
+                        backlogOrderValue: queryBacklogIndex.orderField ? wit.fields[queryBacklogIndex.orderField] : null,
                         tags: (wit.fields["System.Tags"] || "").split("; ").filter((t) => (t || "").length),
                         attachments: (wit.relations || []).filter((a) => a.rel === "AttachedFile"),
                         dependencies: (wit.relations || []).filter((a) => (a.rel === "System.LinkTypes.Dependency-Forward") && ((a.attributes || {}).name === "Successor")).map((r) => parseInt(r.url.split("/").pop()))
@@ -264,6 +268,12 @@ define([
                         results.push(o);
                     });
                 });
+
+                backlogOrderService.includeQueryItems(queryBacklogIndex, results);
+                if (!historical) {
+                    this.backlogIndex(queryBacklogIndex);
+                    this.backlogAvailable(Object.keys(queryBacklogIndex.levels || {}).length > 0);
+                }
 
                 const duplicateCount = {};
                 results.forEach((wit) => duplicateCount[wit.originalId] = (duplicateCount[wit.originalId] || 0) + 1);
@@ -590,7 +600,7 @@ define([
      * Resets the timeline's zoom.
      */
     Model.prototype.zoomReset = function () {
-        this.zoomPreset(timelineZoomService.fit);
+        this.zoomPreset(timelineZoomService.percent100);
         this.action("_timeline_zoomResetAction");
     };
 
@@ -598,10 +608,13 @@ define([
     /**
      * Applies the selected zoom preset.
      */
-    Model.prototype.applyZoomPreset = function () {
+    Model.prototype.applyZoomPreset = function (value, event) {
+        const selectedValue = event && event.target ? event.target.value : (typeof(value) === "string" ? value : this.zoomPreset());
+        const preset = timelineZoomService.normalizePreset(selectedValue);
+        this.zoomPreset(preset);
         const action = this._timeline_setZoomPresetAction();
         if (typeof(action) === "function") {
-            action(this.zoomPreset());
+            action(preset);
         }
     };
 
@@ -697,7 +710,8 @@ define([
                 configuration: {
                     fields,
                     fieldsValue,
-                    dateGranularity
+                    dateGranularity,
+                    extensionId: this.extensionId
                 },
                 onClose: (result = {}) => {
                     if (Array.isArray(result.fieldsValue)) {
@@ -707,7 +721,7 @@ define([
                     if (result.dateGranularity) {
                         const dateGranularity = dateGranularityService.normalize(result.dateGranularity);
                         this.dateGranularity(dateGranularity);
-                        this.settings.dateGranularity = dateGranularity;
+                        this._saveDateGranularity(dateGranularity);
                     }
                 }
             });
@@ -800,20 +814,36 @@ define([
 
 
     /**
-     * Persists the current query's zoom view without overwriting other settings.
+     * Persists the current query's zoom view in this browser profile.
      *
      * @param {object} view Zoom view.
      */
     Model.prototype._saveZoomView = function (view) {
         const serializedView = timelineZoomService.serializeView(view);
+        return Promise.resolve(browserSettingsService.write(
+            this.extensionId,
+            this.project.id,
+            "zoomView",
+            this.zoomSettingsKey,
+            serializedView,
+            this.browserStorage
+        ));
+    };
 
-        return this._updateSettings((settings) => {
-            if (!settings.zoomViews || (typeof(settings.zoomViews) !== "object") || Array.isArray(settings.zoomViews)) {
-                settings.zoomViews = {};
-            }
 
-            settings.zoomViews[this.zoomSettingsKey] = serializedView;
-        }, "App : Unable to save the timeline zoom view.");
+    /**
+     * Persists date granularity in this browser profile.
+     */
+    Model.prototype._saveDateGranularity = function (value) {
+        value = dateGranularityService.normalize(value);
+        return Promise.resolve(browserSettingsService.write(
+            this.extensionId,
+            this.project.id,
+            "dateGranularity",
+            null,
+            value,
+            this.browserStorage
+        ));
     };
 
     /**
@@ -858,19 +888,26 @@ define([
 
         this.backlogLoading(true);
         const client = api.getClient(workApi.WorkRestClient);
-        return client.getBacklogs(this._getTeamContext())
-            .then((backlogs) => (backlogs || []).filter((backlog) => !backlog.isHidden))
-            .then((backlogs) => Promise.all([
+        return Promise.all([
+                client.getBacklogs(this._getTeamContext()),
+                client.getBacklogConfigurations(this._getTeamContext()).catch(() => null)
+            ])
+            .then((response) => ({
+                backlogs: (response[0] || []).filter((backlog) => !backlog.isHidden),
+                configuration: response[1]
+            }))
+            .then(({ backlogs, configuration }) => Promise.all([
                 backlogs,
-                Promise.all(backlogs.map((backlog) => client.getBacklogLevelWorkItems(this._getTeamContext(), backlog.id)))
+                Promise.all(backlogs.map((backlog) => client.getBacklogLevelWorkItems(this._getTeamContext(), backlog.id))),
+                (((configuration || {}).backlogFields || {}).typeFields || {}).Order || null
             ]))
             .then((response) => {
-                const index = backlogOrderService.createIndex(response[0], response[1]);
+                const index = backlogOrderService.createIndex(response[0], response[1], response[2]);
                 if (requestId !== this._backlogRequestId) {
                     return emptyIndex;
                 }
                 this.backlogIndex(index);
-                this.backlogAvailable(index.size > 0);
+                this.backlogAvailable(Object.keys(index.levels).length > 0);
                 this.backlogLoading(false);
                 return index;
             })
@@ -1315,6 +1352,13 @@ define([
                 let team = null;
                 let dateGranularity = null;
                 const query = sdk.getConfiguration().query;
+                let extensionId = "querygantt";
+
+                try {
+                    extensionId = sdk.getExtensionContext().id || extensionId;
+                }
+                catch (error) {
+                }
 
                 try {
                     team = sdk.getTeamContext();
@@ -1342,12 +1386,24 @@ define([
                     }
                 }
 
-                const zoomViews = parsedSettings.zoomViews && (typeof(parsedSettings.zoomViews) === "object") && !Array.isArray(parsedSettings.zoomViews) ? parsedSettings.zoomViews : {};
                 const zoomSettingsKey = ((query || {}).id || (query || {}).name || "default") + "";
-                const zoomView = timelineZoomService.normalizeView(zoomViews[zoomSettingsKey]);
+                const legacyZoomViews = parsedSettings.zoomViews && (typeof(parsedSettings.zoomViews) === "object") && !Array.isArray(parsedSettings.zoomViews) ? parsedSettings.zoomViews : {};
+                const browserGranularity = browserSettingsService.read(extensionId, project.id, "dateGranularity", null);
+                const browserZoomView = browserSettingsService.read(extensionId, project.id, "zoomView", zoomSettingsKey);
+                dateGranularity = dateGranularityService.normalize(browserGranularity === null ? dateGranularity : browserGranularity);
+                const zoomView = timelineZoomService.normalizeView(browserZoomView === null ? legacyZoomViews[zoomSettingsKey] : browserZoomView);
+
+                // Migrate older Extension Data preferences into per-browser
+                // storage the first time this version is opened.
+                if (browserGranularity === null && parsedSettings.dateGranularity) {
+                    browserSettingsService.write(extensionId, project.id, "dateGranularity", null, dateGranularity);
+                }
+                if (browserZoomView === null && legacyZoomViews[zoomSettingsKey]) {
+                    browserSettingsService.write(extensionId, project.id, "zoomView", zoomSettingsKey, timelineZoomService.serializeView(zoomView));
+                }
 
                 // Read some initial data from query string
-                if (state["showFields"]) {
+                if (!Array.isArray(showFields) && state["showFields"]) {
                     showFields = state["showFields"].split(",").filter((f) => f.length > 0);
                 }
 
@@ -1364,6 +1420,7 @@ define([
                     orderMode,
                     dateGranularity,
                     zoomView,
+                    extensionId,
                     manager,
                     settings: parsedSettings,
                     settingsKey: `gantt_${project.id}`
