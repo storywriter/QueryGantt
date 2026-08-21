@@ -15,12 +15,12 @@ This is an integration and reference branch, not a replacement for reviewing and
 
 The branch starts from `info-emait/QueryGantt@54f4cdb` (`v1.5.2`). The PR changes were replayed in PR-number order:
 
-| Pull request | Source commit(s) | Commit(s) on this branch |
-| --- | --- | --- |
-| #31 | `b7fa674`, `31d0de5` | `7959d4e`, `f1758f0` |
-| #33 | `31389d5` | `3b9ccfb` |
-| #35 | `04f9775` | `0622e6e` |
-| #37 | `c15a451` | `1924028` |
+| Pull request | Initial source commit(s) | Current focused PR tip | Initial commit(s) on this branch |
+| --- | --- | --- | --- |
+| #31 | `b7fa674`, `31d0de5` | `25a7482` | `7959d4e`, `f1758f0` |
+| #33 | `31389d5` | `6691644` | `3b9ccfb` |
+| #35 | `04f9775` | `cd6f101` | `0622e6e` |
+| #37 | `c15a451` | `1279fcf` | `1924028` |
 
 The commit IDs differ because the changes were replayed onto one branch and integration conflicts were resolved there.
 
@@ -29,7 +29,9 @@ Two additional stabilization commits were initially added on the combined branch
 - `bcda4dc` serializes and merges settings updates so backlog order, date granularity, and zoom settings do not overwrite one another. It also adds combined-behavior tests.
 - `b2c95d9` prevents duplicate initial query/backlog loads caused by eager Knockout computed evaluation and adds startup and day-drag boundary tests. This startup fix is also carried by each focused PR branch so any PR can be tested independently.
 
-The current branch tip adds the production-feedback hardening described below. The relevant parts are also carried by their focused PR branches rather than requiring this integration branch to be merged.
+`a1f33ff` adds the production-feedback hardening described below. `962ad5d` additionally keeps the Day zoom cap correct when Azure DevOps resizes the extension host. The relevant parts are also carried by their focused PR branches rather than requiring this integration branch to be merged.
+
+The first internally installed package exposed the following integration gaps, all of which are addressed at the current tips: fixed-height row scrolling, a redundant bottom axis, non-responsive native drag handles, completed items missing from the backlog response, inactive zoom/granularity controls, stale per-user preferences, and the `Order` label. This branch is therefore useful as a combined regression reference; it does not replace the focused review scope of the individual PRs.
 
 ## Integration decisions
 
@@ -37,7 +39,7 @@ The current branch tip adds the production-feedback hardening described below. T
 - Use pointer-driven backlog drag handling so vis-timeline's gesture handling cannot swallow native drag events. Query items omitted from the Backlog API, including completed items, are associated with their process-specific Order field and remain eligible for reorder operations.
 - Keep visible columns and backlog sort mode in Azure Extension Data as before. Keep timeline granularity and zoom in browser-local storage, scoped by extension, project, and (for zoom) query, so public/internal installations and different queries do not overwrite each other.
 - Define zoom presets as data-relative magnifications: `100%` fits all data, while `200%` through `500%` show progressively smaller windows. Arbitrary wheel/pinch/button zoom is stored as `Custom`.
-- In `Day` granularity, set a width-aware `zoomMin` so vis-timeline cannot switch to an hour/minute axis. `Hours and minutes` retains the original unrestricted behavior.
+- In `Day` granularity, set and resize a width-aware `zoomMin` so vis-timeline cannot switch to an hour/minute axis. `Hours and minutes` retains the original unrestricted behavior.
 - Observe backlog order, date granularity, and zoom together when constructing or updating the timeline.
 
 If the four PRs are merged separately, the suggested order is #31, #33, #35, then #37. The two integration-only commits above should then be reviewed and adapted to the resulting upstream state. This branch should not be merged wholesale without that review, especially if `main` has moved beyond `v1.5.2`.
@@ -50,6 +52,7 @@ Last rerun on 2026-08-22:
 - Date-granularity unit and integration suites passed under both `America/New_York` and `Asia/Tokyo` time zones.
 - `npx grunt app-build:Debug`: passed, including JSHint for 37 files.
 - `npx grunt app-build:Release`: passed, including JSHint for 37 files, CSS minification, and JavaScript minification.
+- The parameterized internal Release build also passed with a non-production review publisher/version, proving that the same integrated source follows the private-build path without relying on public extension placeholders.
 - Browser checks against the actual Release-built component and bundled vis-timeline 8.5.0: all 12 integrated checks passed with zero console errors.
 - Real pointer input was used to verify both completed-item sibling reordering and cross-level Parent reassignment. The latter produced the expected `inside` reorder plan.
 
@@ -57,4 +60,4 @@ The combined checks cover natural page scrolling, the floating top-only axis, co
 
 ## Remaining live-environment check
 
-The browser checks exercise the Release build but do not authenticate to a real Azure DevOps organization. Before publication, a live smoke test should still confirm the updated package inside the Azure DevOps host iframe, browser-local restoration after navigation/reload, and successful reorder writes for both active and completed Work Items in the target process/team.
+The first package was exercised in a real Azure DevOps organization and produced the production feedback above. The corrected Release build has automated and local-browser coverage, but it has not yet been reinstalled there. Before publication, a second live smoke test should confirm the corrected package inside the Azure DevOps host iframe, browser-local restoration after navigation/reload, and successful reorder writes for both active and completed Work Items in the target process/team.
