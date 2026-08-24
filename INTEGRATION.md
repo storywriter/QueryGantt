@@ -38,7 +38,7 @@ The first internally installed package exposed the following integration gaps, a
 - Let the Azure DevOps page scroll the naturally expanded Work Item rows. Only the top date axis is rendered; a read-only fixed mirror keeps it below the sticky filter after its original position scrolls away. PNG export renders the already expanded timeline without changing the user's scroll state.
 - Use pointer-driven backlog drag handling so vis-timeline's gesture handling cannot swallow native drag events. Query items omitted from the Backlog API, including completed items, are associated with their process-specific Order field and remain eligible for reorder operations.
 - Keep visible columns and backlog sort mode in Azure Extension Data as before. Keep timeline granularity and zoom in browser-local storage, scoped by extension, project, and (for zoom) query, so public/internal installations and different queries do not overwrite each other.
-- Define zoom presets as data-relative magnifications: `100%` fits all data, while `200%` through `500%` show progressively smaller windows. Arbitrary wheel/pinch/button zoom is stored as `Custom`.
+- Define zoom presets as data-relative magnifications: `100%` fits all data, while `200%` through `400%` show progressively smaller windows. Arbitrary wheel/pinch/button zoom is stored as `Custom`.
 - In `Day` granularity, set and resize a width-aware `zoomMin` so vis-timeline cannot switch to an hour/minute axis. `Hours and minutes` retains the original unrestricted behavior.
 - Observe backlog order, date granularity, and zoom together when constructing or updating the timeline.
 
