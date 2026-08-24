@@ -46,6 +46,7 @@ loadService(path.join(__dirname, "../js/services/timeline-zoom.js"), (value) => 
 loadService(path.join(__dirname, "../js/services/date-granularity.js"), (value) => dateService = value);
 
 const listeners = {};
+const chartListeners = {};
 let hitElement = null;
 const filter = { getBoundingClientRect: function () { return { top: 0, bottom: 48 }; } };
 const document = {
@@ -91,12 +92,20 @@ const axis = {
     }
 };
 const chart = {
+    clientWidth: 600,
+    addEventListener: function (name, callback) { chartListeners[name] = callback; },
+    removeEventListener: function (name, callback) { if (chartListeners[name] === callback) { delete chartListeners[name]; } },
     querySelector: function (selector) { return selector === ".vis-panel.vis-top" ? axis : null; },
-    getBoundingClientRect: function () { return { bottom: 500 }; }
+    getBoundingClientRect: function () { return { bottom: 500, width: 600 }; }
+};
+const scrollContainer = {
+    scrollTop: 200,
+    addEventListener: function () {},
+    removeEventListener: function () {}
 };
 const root = {
     classList: makeClassList(),
-    closest: function () { return null; },
+    closest: function (selector) { return selector === ".v-scroll-auto" ? scrollContainer : null; },
     contains: function (element) { return element === targetElement; },
     getBoundingClientRect: function () { return { left: 80 }; },
     querySelectorAll: function (selector) { return selector === "[data-backlog-drop-position]" && attributes["data-backlog-drop-position"] ? [targetElement] : []; },
@@ -168,5 +177,41 @@ assert.ok(viewModel.floatingAxis.firstChild, "the live top date labels should be
 axisTop = 80;
 viewModel._syncFloatingAxis(false);
 assert.strictEqual(viewModel.floatingAxis.classList.contains("my-timeline__floating-axis--visible"), false, "the floating mirror should hide while the original axis is visible");
+
+const originalStart = new Date("2026-08-01T00:00:00.000Z");
+const originalEnd = new Date("2026-08-31T00:00:00.000Z");
+let visibleWindow = { start: originalStart, end: originalEnd };
+viewModel.timeline = {
+    range: { options: { moveable: true } },
+    getWindow: function () { return visibleWindow; },
+    setWindow: function (start, end) { visibleWindow = { start: start, end: end }; }
+};
+
+let prevented = false;
+viewModel._onTimelineWheel({
+    deltaX: 0, deltaY: 120, shiftKey: false, ctrlKey: false, cancelable: true,
+    preventDefault: function () { prevented = true; }, stopPropagation: function () {}
+});
+assert.strictEqual(prevented, false, "a vertical wheel should remain available to the page scroll container");
+assert.strictEqual(visibleWindow.start.getTime(), originalStart.getTime(), "a vertical wheel must not pan the date range");
+
+viewModel._onTimelineWheel({
+    deltaX: 60, deltaY: 0, shiftKey: false, ctrlKey: false, cancelable: true,
+    preventDefault: function () { prevented = true; }, stopPropagation: function () {}
+});
+assert.strictEqual(prevented, true, "horizontal trackpad input should be consumed by the timeline");
+assert.ok(visibleWindow.start.getTime() > originalStart.getTime(), "horizontal trackpad input should pan the date range horizontally");
+
+const gestureTarget = { closest: function () { return null; } };
+viewModel._onTimelinePointerDown({
+    pointerId: 20, pointerType: "mouse", button: 0, clientX: 300, clientY: 300, target: gestureTarget
+});
+viewModel._onTimelinePointerMove({
+    pointerId: 20, clientX: 302, clientY: 250, cancelable: true, preventDefault: function () {}
+});
+assert.strictEqual(scrollContainer.scrollTop, 250, "a vertical background drag should scroll the page in the matching direction");
+assert.strictEqual(viewModel.timeline.range.options.moveable, false, "vis horizontal panning should be suspended during a vertical drag");
+viewModel._onTimelinePointerUp({ pointerId: 20 });
+assert.strictEqual(viewModel.timeline.range.options.moveable, true, "vis panning should be restored after the vertical drag");
 
 console.log("timeline interaction tests passed");
