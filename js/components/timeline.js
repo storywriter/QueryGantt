@@ -60,7 +60,10 @@ define([
         this._onTimelinePointerUpBound = this._onTimelinePointerUp.bind(this);
         this._syncFloatingAxisBound = this._syncFloatingAxis.bind(this);
         this._resizeTimelineBound = this._resizeTimeline.bind(this);
-        this._timelineChangedBound = () => this._syncFloatingAxis(true);
+        this._timelineChangedBound = () => {
+            this._syncRangeItemVisibility();
+            this._syncFloatingAxis(true);
+        };
         this.scrollContainer = typeof(this.root.closest) === "function" ? this.root.closest(".v-scroll-auto") : null;
         this.floatingAxis = global.document.createElement("div");
         this.floatingAxis.classList.add("my-timeline", "my-timeline__floating-axis");
@@ -588,6 +591,42 @@ define([
         this.floatingAxis.style.width = axisBounds.width + "px";
         this.floatingAxis.style.height = axisBounds.height + "px";
         this.floatingAxis.classList.add("my-timeline__floating-axis--visible");
+    };
+
+
+    /**
+     * Hides stale item DOM that vis-timeline can briefly retain after a saved
+     * range is restored. Only records overlapping the current date window may
+     * remain visible; moving the window back clears the guard automatically.
+     */
+    Timeline.prototype._syncRangeItemVisibility = function () {
+        if (!this.timeline || !this.timeline.itemSet || !this.timeline.itemSet.items
+            || typeof(this.timeline.getWindow) !== "function") {
+            return;
+        }
+
+        const range = this.timeline.getWindow();
+        const rangeStart = range && range.start instanceof Date ? range.start.getTime() : NaN;
+        const rangeEnd = range && range.end instanceof Date ? range.end.getTime() : NaN;
+        if (!Number.isFinite(rangeStart) || !Number.isFinite(rangeEnd)) {
+            return;
+        }
+
+        Object.keys(this.timeline.itemSet.items).forEach((id) => {
+            const item = this.timeline.itemSet.items[id];
+            const data = (item || {}).data || {};
+            const start = data.start instanceof Date ? data.start.getTime() : new Date(data.start).getTime();
+            const end = data.end instanceof Date ? data.end.getTime() : new Date(data.end).getTime();
+            const element = ((item || {}).dom || {}).box || ((item || {}).dom || {}).point;
+            if (!Number.isFinite(start) || !element || !element.style) {
+                return;
+            }
+
+            const visible = Number.isFinite(end)
+                ? start < rangeEnd && end > rangeStart
+                : start >= rangeStart && start < rangeEnd;
+            element.style.visibility = visible ? "" : "hidden";
+        });
     };
 
 
@@ -1120,6 +1159,7 @@ define([
             // data-relative 100% range.
             onInitialDrawComplete: () => {
                 this._restoreZoom();
+                this._syncRangeItemVisibility();
                 this._syncFloatingAxis(true);
             }
             //template: function (item, element, data) { return '<h1>' + item.header + data.moving?' '+ data.start:'' + '</h1><p>' + item.description + '</p>'; }

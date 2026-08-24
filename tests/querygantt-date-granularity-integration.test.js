@@ -260,6 +260,19 @@ assert.strictEqual(capture.instance.setOptionsCalls[0].zoomMin, dateGranularityS
 assert.strictEqual(capture.options.verticalScroll, false, "work items should use the page's full-height scroll area");
 assert.deepStrictEqual(JSON.parse(JSON.stringify(capture.options.orientation)), { axis: "top", item: "top" }, "only the floating top date axis should be rendered");
 
+const insideElement = { style: {} };
+const outsideElement = { style: {} };
+capture.instance.itemSet = { items: {
+    inside: { data: { start: new Date("2026-08-20T00:00:00.000Z"), end: new Date("2026-08-22T00:00:00.000Z") }, dom: { box: insideElement } },
+    outside: { data: { start: new Date("2026-09-23T00:00:00.000Z"), end: new Date("2026-09-26T00:00:00.000Z") }, dom: { box: outsideElement } }
+} };
+timelineViewModel._syncRangeItemVisibility();
+assert.strictEqual(insideElement.style.visibility, "", "a work item overlapping the visible date range should remain visible");
+assert.strictEqual(outsideElement.style.visibility, "hidden", "a stale work item outside the visible date range should not remain pinned to an edge");
+capture.instance.window = { start: new Date("2026-09-20T00:00:00.000Z"), end: new Date("2026-09-30T00:00:00.000Z") };
+timelineViewModel._syncRangeItemVisibility();
+assert.strictEqual(outsideElement.style.visibility, "", "the visibility guard should clear when the date range reaches the work item");
+
 granularity("time");
 timelineViewModel._onItemsChanged();
 capture = timelineCaptures[timelineCaptures.length - 1];
