@@ -69,16 +69,20 @@ const document = {
     }
 };
 
-const attributes = {};
-const targetElement = {
-    classList: makeClassList(),
-    getAttribute: function (name) { return attributes[name] || null; },
-    setAttribute: function (name, value) { attributes[name] = value; },
-    removeAttribute: function (name) { delete attributes[name]; },
-    getBoundingClientRect: function () { return { top: 100, height: 30 }; },
-    closest: function (selector) { return selector === ".my-timeline-group" ? this : null; }
+const makeTargetElement = function (id, top) {
+    const attributes = { "data-work-item-id": id + "" };
+    return {
+        attributes: attributes,
+        classList: makeClassList(),
+        getAttribute: function (name) { return attributes[name] || null; },
+        setAttribute: function (name, value) { attributes[name] = value; },
+        removeAttribute: function (name) { delete attributes[name]; },
+        getBoundingClientRect: function () { return { top: top, height: 30 }; },
+        closest: function (selector) { return selector === ".my-timeline-group" ? this : null; }
+    };
 };
-attributes["data-work-item-id"] = "2";
+const targetElement = makeTargetElement(2, 100);
+const nextTargetElement = makeTargetElement(3, 130);
 
 const dropZone = { classList: makeClassList(), style: {} };
 let axisTop = -20;
@@ -106,13 +110,21 @@ const scrollContainer = {
 const root = {
     classList: makeClassList(),
     closest: function (selector) { return selector === ".v-scroll-auto" ? scrollContainer : null; },
-    contains: function (element) { return element === targetElement; },
+    contains: function (element) { return element === targetElement || element === nextTargetElement; },
     getBoundingClientRect: function () { return { left: 80 }; },
-    querySelectorAll: function (selector) { return selector === "[data-backlog-drop-position]" && attributes["data-backlog-drop-position"] ? [targetElement] : []; },
+    querySelectorAll: function (selector) {
+        if (selector === ".my-timeline-group") { return [targetElement, nextTargetElement]; }
+        if (selector === "[data-backlog-drop-position]") {
+            return [targetElement, nextTargetElement].filter((element) => element.attributes["data-backlog-drop-position"]);
+        }
+        return [];
+    },
     querySelector: function (selector) {
         if (selector === ".my-timeline__root-drop-zone") { return dropZone; }
         if (selector === ".my-timeline__chart") { return chart; }
-        if (selector === "[data-backlog-drop-position]") { return attributes["data-backlog-drop-position"] ? targetElement : null; }
+        if (selector === "[data-backlog-drop-position]") {
+            return [targetElement, nextTargetElement].find((element) => element.attributes["data-backlog-drop-position"]) || null;
+        }
         return null;
     }
 };
@@ -142,26 +154,46 @@ const viewModel = ko.registration.viewModel.createViewModel({
 
 const groupUpdates = [];
 viewModel.timeline = {};
+const groupData = new Map([
+    [1, { id: 1, treeLevel: 1, visible: true, showNested: false, nestedGroups: [2, 3] }],
+    [2, { id: 2, treeLevel: 2, visible: false, showNested: false, nestedGroups: [4] }],
+    [3, { id: 3, treeLevel: 2, visible: false }],
+    [4, { id: 4, treeLevel: 3, visible: false }]
+]);
 viewModel.groups = {
-    forEach: function (callback) {
-        [{ id: 1, treeLevel: 1, nestedGroups: [2] }, { id: 2, treeLevel: 2 }].forEach(callback);
+    forEach: function (callback) { groupData.forEach(callback); },
+    get: function (id) { return groupData.get(Number(id)); },
+    update: function (updates) {
+        updates.forEach((update) => groupData.set(update.id, Object.assign({}, groupData.get(update.id), update)));
+        groupUpdates.push(updates);
     },
-    update: function (updates) { groupUpdates.push(updates); }
 };
 viewModel.expand();
-assert.strictEqual(groupUpdates.length, 1, "expand all should update the DataSet in one redraw batch");
-assert.strictEqual(groupUpdates[0].length, 2);
-groupUpdates.length = 0;
+assert.strictEqual(groupUpdates.length, 1, "expanding one level should update the DataSet in one redraw batch");
+assert.strictEqual(groupData.get(1).showNested, true);
+assert.strictEqual(groupData.get(2).visible, true);
+assert.strictEqual(groupData.get(2).showNested, false, "a newly visible parent should remain collapsed until the next click");
+assert.strictEqual(groupData.get(3).visible, true);
+assert.strictEqual(groupData.get(4).visible, false, "the first click must not reveal grandchildren");
+viewModel.expand();
+assert.strictEqual(groupUpdates.length, 2, "the second click should expand the next hierarchy level");
+assert.strictEqual(groupData.get(2).showNested, true);
+assert.strictEqual(groupData.get(4).visible, true);
 viewModel.collapse();
-assert.strictEqual(groupUpdates.length, 1, "collapse all should update the DataSet in one redraw batch");
-assert.deepStrictEqual(JSON.parse(JSON.stringify(groupUpdates[0])), [
-    { id: 1, showNested: false },
-    { id: 2, visible: false }
-]);
+assert.strictEqual(groupUpdates.length, 3, "collapsing one level should update the DataSet in one redraw batch");
+assert.strictEqual(groupData.get(1).showNested, true, "the first collapse should leave the shallower level open");
+assert.strictEqual(groupData.get(2).showNested, false);
+assert.strictEqual(groupData.get(4).visible, false);
+viewModel.collapse();
+assert.strictEqual(groupUpdates.length, 4, "the second collapse should close the root level");
+assert.strictEqual(groupData.get(1).showNested, false);
+assert.strictEqual(groupData.get(2).visible, false);
+assert.strictEqual(groupData.get(3).visible, false);
 
-const dragged = { id: 1, originalId: 1, backlogEligible: true, backlogId: "stories", backlogRank: 1, isCompleted: true };
-const target = { id: 2, originalId: 2, backlogEligible: true, backlogId: "stories", backlogRank: 1 };
-viewModel.groups = { get: function (id) { return Number(id) === 1 ? dragged : Number(id) === 2 ? target : null; } };
+const dragged = { id: 1, originalId: 1, backlogEligible: true, backlogTargetEligible: true, backlogId: "stories", backlogRank: 1, backlogParentId: 11, backlogParentValid: true, isCompleted: true };
+const target = { id: 2, originalId: 2, backlogEligible: true, backlogTargetEligible: true, backlogId: "stories", backlogRank: 1, backlogParentId: 11, backlogParentValid: true };
+const nextTarget = { id: 3, originalId: 3, backlogEligible: true, backlogTargetEligible: true, backlogId: "stories", backlogRank: 1, backlogParentId: 11, backlogParentValid: true };
+viewModel.groups = { get: function (id) { return [dragged, target, nextTarget].find((group) => group.id === Number(id)) || null; } };
 const handle = {
     captured: null,
     setPointerCapture: function (id) { this.captured = id; },
@@ -174,6 +206,8 @@ const pointerEvent = function (type, clientY) {
         preventDefault: function () {}, stopPropagation: function () {}, stopImmediatePropagation: function () {}
     };
 };
+assert.strictEqual(viewModel._getBacklogDropPosition(dragged, Object.assign({}, target, { backlogParentValid: false }), targetElement, pointerEvent("pointermove", 105)), null, "an invalid destination hierarchy must not expose a drop line");
+assert.strictEqual(viewModel._getBacklogDropPosition(dragged, Object.assign({}, target, { backlogEligible: false }), targetElement, pointerEvent("pointermove", 105)), null, "a target outside the current team's Area Paths must not expose a drop line");
 
 viewModel._onBacklogPointerDown(dragged, handle, pointerEvent("pointerdown", 100));
 assert.strictEqual(viewModel._backlogDraggedId, 1, "completed work items should start the same pointer drag as active items");
@@ -181,9 +215,13 @@ assert.ok(listeners.pointermove && listeners.pointerup, "the drag should track p
 
 hitElement = targetElement;
 viewModel._onBacklogPointerMove(pointerEvent("pointermove", 124));
-assert.strictEqual(attributes["data-backlog-drop-position"], "after");
-viewModel._onBacklogPointerUp(pointerEvent("pointerup", 124));
-assert.deepStrictEqual(JSON.parse(JSON.stringify(move)), { draggedId: 1, targetId: 2, position: "after" });
+assert.strictEqual(targetElement.attributes["data-backlog-drop-position"], undefined);
+assert.strictEqual(nextTargetElement.attributes["data-backlog-drop-position"], "before", "the lower half of one row should canonicalize to the next sibling's upper boundary");
+hitElement = nextTargetElement;
+viewModel._onBacklogPointerMove(pointerEvent("pointermove", 132));
+assert.strictEqual(nextTargetElement.attributes["data-backlog-drop-position"], "before", "moving a few pixels across the same logical boundary should keep one drop target");
+viewModel._onBacklogPointerUp(pointerEvent("pointerup", 132));
+assert.deepStrictEqual(JSON.parse(JSON.stringify(move)), { draggedId: 1, targetId: 3, position: "before" });
 assert.strictEqual(viewModel._backlogDraggedId, null);
 
 viewModel.timeline = {};
