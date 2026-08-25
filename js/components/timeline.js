@@ -293,7 +293,7 @@ define([
         }
         else {
             const center = new Date((before.start.getTime() + before.end.getTime()) / 2);
-            const range = timelineZoomService.getPresetWindow(preset, this._fitRange, center);
+            const range = timelineZoomService.getPresetWindow(preset, this._fitRange, center, this._getTimelineWidth());
             if (!range) {
                 this._pendingZoomPreset = null;
                 return;
@@ -434,13 +434,30 @@ define([
      */
     Timeline.prototype._resizeTimeline = function () {
         this._syncFloatingAxis();
-        if (!this.timeline || dateGranularityService.normalize(this.dateGranularity()) !== dateGranularityService.day) {
+        if (!this.timeline) {
             return;
         }
 
-        this.timeline.setOptions({
-            zoomMin: dateGranularityService.getZoomMin(dateGranularityService.day, this.node.clientWidth)
-        });
+        const width = this._getTimelineWidth();
+        if (dateGranularityService.normalize(this.dateGranularity()) === dateGranularityService.day) {
+            this.timeline.setOptions({
+                zoomMin: dateGranularityService.getZoomMin(dateGranularityService.day, width)
+            });
+        }
+
+        const value = (this.zoomView && typeof(this.zoomView.peek) === "function") ? this.zoomView.peek() : this.zoomView();
+        if (timelineZoomService.normalizeView(value).preset === timelineZoomService.daily) {
+            this.setZoomPreset(timelineZoomService.daily);
+        }
+    };
+
+
+    /**
+     * Gets the drawable timeline width without the variable row-label panel.
+     */
+    Timeline.prototype._getTimelineWidth = function () {
+        const center = this.timeline && this.timeline.body && this.timeline.body.domProps && this.timeline.body.domProps.center;
+        return (center && Number(center.width)) || this.node.clientWidth || 1;
     };
 
     /**
@@ -533,7 +550,7 @@ define([
         }
         else if (view.preset !== timelineZoomService.percent100) {
             const center = new Date((this._fitRange.start.getTime() + this._fitRange.end.getTime()) / 2);
-            const range = timelineZoomService.getPresetWindow(view.preset, this._fitRange, center);
+            const range = timelineZoomService.getPresetWindow(view.preset, this._fitRange, center, this._getTimelineWidth());
             if (range) {
                 this._pendingZoomPreset = view.preset;
                 this._ignoredRange = range;
@@ -1040,18 +1057,14 @@ define([
 
 
     /**
-     * Handles the group title click event.
+     * Keeps native target=_blank navigation isolated from vis-timeline's row
+     * selection handlers. Native anchor navigation avoids rendering an Azure
+     * DevOps work-item page inside the extension iframe.
      * 
      * @param {object} e Event arguments. 
      */
     Timeline.prototype._onGroupTitleSelect = function (e) {
         e.stopPropagation();
-        e.preventDefault();
-
-        var id = parseInt(e.target.getAttribute("data-id"));
-        if (!isNaN(id)) {
-            this.callback("openNewWindow", e.target.getAttribute("href"));
-        }
     };
 
 
@@ -1458,7 +1471,7 @@ define([
 
         const result = [
             `${icons[type.icon.url] || ""}`,
-            `<a class="my-timeline-group__title ${record.isCompleted ? "my-timeline-group__title--completed" : ""}" data-id="${record.id}" title="${record.title}" href="${record.url.replace('/_apis/wit/workItems/', '/_workitems/edit/')}">${showFields.includes("id") ? "<span class='font-weight-semibold'>#" + record.id + "</span>&nbsp" : ""}${record.content}</a>`,
+            `<a class="my-timeline-group__title ${record.isCompleted ? "my-timeline-group__title--completed" : ""}" data-id="${record.id}" title="${record.title}" href="${record.url.replace('/_apis/wit/workItems/', '/_workitems/edit/')}" target="_blank" rel="noopener noreferrer">${showFields.includes("id") ? "<span class='font-weight-semibold'>#" + record.id + "</span>&nbsp" : ""}${record.content}</a>`,
             `<div class="my-timeline-group__state" title="${record.state}" style="background-color: #${state.color}"></div>`
         ];
 
@@ -1555,6 +1568,7 @@ define([
         el.innerHTML = result.join("");
 
         el.querySelector(".my-timeline-group__title").addEventListener("pointerdown", vm._onGroupTitleSelect.bind(vm), false);
+        el.querySelector(".my-timeline-group__title").addEventListener("click", vm._onGroupTitleSelect.bind(vm), false);
         el.querySelector(".my-timeline-group__button--checkbox").addEventListener("pointerdown", vm._onGroupSelect.bind(vm), false);
         el.querySelector(".my-timeline-group__button--edit").addEventListener("pointerdown", vm._onGroupEdit.bind(vm), false);
 

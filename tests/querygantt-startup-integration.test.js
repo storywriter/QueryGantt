@@ -44,7 +44,7 @@ const loadAmd = function (filename, dependencies, exposeModel) {
             result = factory.apply(null, names.map(function (name) { return dependencies[name] || {}; }));
         },
         document: document,
-        fetch: function () { throw new Error("Unexpected fetch"); },
+        fetch: dependencies.__fetch || function () { throw new Error("Unexpected fetch"); },
         isNaN: isNaN
     }, { filename: path.basename(filename) });
 
@@ -166,4 +166,94 @@ assert.strictEqual(Object.keys(primaryFilter()).length, 0);
 
 filter.dispose();
 
-console.log("querygantt startup integration tests passed");
+(async function () {
+    let resolveBacklogs = null;
+    const delayedBacklogs = new Promise((resolve) => resolveBacklogs = resolve);
+    const witApi = { WorkItemTrackingRestClient: function WorkItemTrackingRestClient() {} };
+    const workApi = { WorkRestClient: function WorkRestClient() {} };
+    const workClient = {
+        getBacklogs: function () { return delayedBacklogs; },
+        getBacklogConfigurations: function () { return Promise.resolve({ backlogFields: { typeFields: { Order: "Microsoft.VSTS.Common.StackRank" } } }); },
+        getTeamFieldValues: function () { return Promise.resolve(null); },
+        getBacklogLevelWorkItems: function () { return Promise.resolve({ workItems: [{ source: null, target: { id: 1 } }] }); }
+    };
+    const witClient = {
+        _options: { rootPath: Promise.resolve("https://dev.azure.com/example/") },
+        queryByWiql: function () { return Promise.resolve({ queryType: 1, sortColumns: [], workItems: [{ id: 1 }] }); },
+        getWorkItems: function () {
+            return Promise.resolve([{
+                id: 1,
+                url: "https://dev.azure.com/example/_apis/wit/workItems/1",
+                fields: {
+                    "System.Id": 1,
+                    "System.Rev": 1,
+                    "System.TeamProject": "Project",
+                    "System.WorkItemType": "Task",
+                    "System.Title": "Visible before backlog discovery",
+                    "System.State": "New",
+                    "System.AreaPath": "Project",
+                    "System.NodeName": "Project",
+                    "System.IterationPath": "Project",
+                    "System.CreatedBy": { displayName: "Creator" },
+                    "System.ChangedBy": { displayName: "Changer" },
+                    "System.CreatedDate": "2026-08-01T00:00:00.000Z",
+                    "System.ChangedDate": "2026-08-01T00:00:00.000Z",
+                    "Microsoft.VSTS.Common.StackRank": 100
+                },
+                relations: []
+            }]);
+        }
+    };
+    const asyncApi = {
+        CommonServiceIds: {},
+        getClient: function (type) { return type === witApi.WorkItemTrackingRestClient ? witClient : workClient; }
+    };
+    const asyncApp = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
+        module: { config: function () { return {}; } },
+        knockout: ko,
+        sdk: { getAccessToken: function () { return Promise.resolve("token"); } },
+        "api/index": asyncApi,
+        "api/WorkItemTracking/index": witApi,
+        "api/Work/index": workApi,
+        "services/backlog-order": backlogOrderService,
+        "services/browser-settings": { write: function () { return true; } },
+        "services/date-granularity": dateGranularityService,
+        "services/timeline-zoom": timelineZoomService,
+        "services/icon": { fetch: function () { return new Promise(function () {}); } },
+        __fetch: function () {
+            return Promise.resolve({
+                ok: true,
+                json: function () {
+                    return Promise.resolve({ value: [{ name: "Task", icon: { url: "https://example.test/task.svg" }, states: [{ name: "New", category: "Proposed" }] }] });
+                }
+            });
+        }
+    }, true);
+    const asyncModel = new asyncApp.Model({
+        version: "test", priorities: [], fields: [], user: "User",
+        project: { id: "project-id", name: "Project" }, team: { id: "team-id", name: "Team" },
+        query: { id: "query-id", name: "Query", wiql: "SELECT [System.Id] FROM WorkItems" },
+        showFields: [], orderMode: backlogOrderService.backlogOrder
+    });
+
+    const initPromise = asyncModel.init();
+    const renderedWithoutBacklog = await Promise.race([
+        initPromise.then(() => true),
+        new Promise((resolve) => setTimeout(() => resolve(false), 100))
+    ]);
+    assert.strictEqual(renderedWithoutBacklog, true, "slow backlog discovery must not block the first query render");
+    assert.strictEqual(asyncModel.wits().length, 1);
+    assert.strictEqual(asyncModel.backlogAvailable(), false);
+
+    resolveBacklogs([{ id: "tasks", rank: 0, isHidden: false, workItemTypes: [{ name: "Task" }] }]);
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.strictEqual(asyncModel.backlogAvailable(), true, "late backlog data should activate without reloading the query");
+    assert.strictEqual(asyncModel.wits()[0].backlogOrder.eligible, true);
+
+    asyncModel.dispose();
+    console.log("querygantt startup integration tests passed");
+})().catch(function (error) {
+    console.error(error);
+    process.exitCode = 1;
+});

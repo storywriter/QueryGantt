@@ -153,6 +153,7 @@ const TimelineStub = function (node, records, groups, options) {
     this.handlers = {};
     this.options = options;
     this.selection = [];
+    this.body = { domProps: { center: { width: 420 } } };
     latestTimeline = this;
 };
 TimelineStub.prototype.getWindow = function () { return { start: new Date(this.window.start), end: new Date(this.window.end) }; };
@@ -236,6 +237,13 @@ latestTimeline.emit("rangechanged", latestTimeline.getWindow());
 assert.strictEqual(changes[2].preset, "100");
 assert.deepStrictEqual(plain(zoomService.serializeView(changes[2])), { preset: "100" });
 
+timelineViewModel.setZoomPreset("daily");
+const dailyDuration = latestTimeline.window.end - latestTimeline.window.start;
+const dailyMinimumStep = dailyDuration * 70 / latestTimeline.body.domProps.center.width;
+assert.ok(dailyMinimumStep > 12 * 60 * 60 * 1000 && dailyMinimumStep < 24 * 60 * 60 * 1000, "the 1 day option should use the drawable chart width and select daily labels");
+latestTimeline.emit("rangechanged", latestTimeline.getWindow());
+assert.strictEqual(changes[3].preset, "daily");
+
 const extensionWrites = [];
 const manager = {
     getValue: function () { return Promise.resolve(JSON.stringify({ showFields: ["duration"], orderMode: "query" })); },
@@ -282,11 +290,12 @@ assert.strictEqual(appModel.zoomPreset(), "300");
     }, browserStorage);
 
     let startupModel = null;
+    let projectCalls = 0;
     const commonServiceIds = { ProjectPageService: "project", HostNavigationService: "navigation" };
     const startupSdk = {
         init: function () {}, ready: function () { return Promise.resolve(); },
         getService: function (id) {
-            if (id === "project") { return Promise.resolve({ getProject: function () { return Promise.resolve({ id: "project-id", name: "Project" }); } }); }
+            if (id === "project") { return Promise.resolve({ getProject: function () { projectCalls += 1; return Promise.resolve({ id: "project-id", name: "Project" }); } }); }
             if (id === "navigation") { return Promise.resolve({ getQueryParams: function () { return Promise.resolve({ showFields: "dates" }); } }); }
             throw new Error("Unexpected service");
         },
@@ -309,6 +318,7 @@ assert.strictEqual(appModel.zoomPreset(), "300");
     await new Promise((resolve) => setImmediate(resolve));
 
     assert.ok(startupModel);
+    assert.strictEqual(projectCalls, 1, "startup should resolve the current project once and reuse it for settings");
     assert.deepStrictEqual(plain(startupModel.showFields()), ["duration"], "saved visible columns should win over the stale query parameter written by a previous view");
     assert.strictEqual(startupModel.dateGranularity(), "day");
     assert.strictEqual(startupModel.zoomPreset(), "custom");
@@ -316,7 +326,8 @@ assert.strictEqual(appModel.zoomPreset(), "300");
 
     const html = fs.readFileSync(path.join(__dirname, "../html/querygantt-tab.html"), "utf8");
     assert.ok(html.includes("<span>Sort:</span>"));
-    ["Custom", "100%", "200%", "300%", "400%"].forEach((label) => assert.ok(html.includes(">" + label + "</option>")));
+    assert.ok(html.includes("order-loading") && html.includes("Loading…"), "a remembered Backlog order should show an explicit loading state before it is activated");
+    ["Custom", "100%", "200%", "300%", "400%", "1 day"].forEach((label) => assert.ok(html.includes(">" + label + "</option>")));
     assert.strictEqual(html.includes(">500%</option>"), false, "the zoom selector should stop at 400%");
 
     console.log("querygantt zoom integration tests passed");

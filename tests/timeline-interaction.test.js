@@ -271,4 +271,18 @@ assert.strictEqual(viewModel.timeline.range.options.moveable, false, "vis horizo
 viewModel._onTimelinePointerUp({ pointerId: 20 });
 assert.strictEqual(viewModel.timeline.range.options.moveable, true, "vis panning should be restored after the vertical drag");
 
+let titlePropagationStopped = false;
+let titleDefaultPrevented = false;
+viewModel._onGroupTitleSelect({
+    stopPropagation: function () { titlePropagationStopped = true; },
+    preventDefault: function () { titleDefaultPrevented = true; }
+});
+assert.strictEqual(titlePropagationStopped, true, "work-item links should not trigger vis-timeline row selection");
+assert.strictEqual(titleDefaultPrevented, false, "work-item links must retain native target=_blank navigation");
+assert.ok(source.includes('target="_blank" rel="noopener noreferrer"'), "every timeline work-item title should explicitly open in a safe browser tab");
+
+const timelineLess = fs.readFileSync(path.join(__dirname, "../less/components/timeline.less"), "utf8");
+assert.ok(timelineLess.includes("&--drop-inside {\n            .my-timeline-group__title"), "a child drop should highlight the target title rather than draw another sibling line");
+assert.ok(timelineLess.includes("--status-success-background"), "the child destination should use a distinct light green success highlight");
+
 console.log("timeline interaction tests passed");
