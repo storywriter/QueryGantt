@@ -41,6 +41,8 @@ A third production pass found intermittent Azure reorder rejections, two adjacen
 
 A fourth production pass on 2026-08-25 is addressed by `cc55b1c`. Backlog discovery no longer blocks the first query render; a remembered Backlog order shows `Loading…`, can recover from a transient `Unavailable` state without a page reload, and retries one stale `TF400486` operation after refreshing only the backlog index. Concrete work-item types now disambiguate invalid same-category and skipped-level parents, while valid Task-to-another-User-Story moves remain supported. Child destinations highlight the title in light green, `1 day` provides a width-aware daily zoom target, and timeline work-item titles use safe native new-tab navigation. Focused equivalents are `ff3f28a` on PR #33, `616c369` on PR #37, and the independent PR #39; PRs #31 and #35 are intentionally unchanged.
 
+A Windows build pass on 2026-08-27 exposed a test-only line-ending dependency in the child-drop LESS assertion. The integration test now normalizes CRLF and CR input before checking the exact selector structure. The equivalent correction belongs to PR #33 because that is the only focused PR containing the child-drop styling and regression test; PRs #31, #35, and #37 do not contain the affected assertion.
+
 ## Integration decisions
 
 - Let the Azure DevOps page scroll the naturally expanded Work Item rows. Only the top date axis is rendered; a read-only fixed mirror keeps it below the sticky filter after its original position scrolls away. PNG export renders the already expanded timeline without changing the user's scroll state.
@@ -62,9 +64,10 @@ If the focused PRs are merged separately, the suggested feature order is #31, #3
 
 ## Validation
 
-Last rerun on 2026-08-26:
+Last rerun on 2026-08-27:
 
 - `npm test`: all 9 Node test suites passed.
+- The timeline interaction suite also passed while its LESS input was forced to Windows CRLF line endings.
 - Date-granularity unit and integration suites passed under both `America/New_York` and `Asia/Tokyo` time zones.
 - `npx grunt app-build:Debug`: passed, including JSHint for 37 files.
 - `npx grunt app-build:Release`: passed, including JSHint for 37 files, CSS minification, and JavaScript minification.
