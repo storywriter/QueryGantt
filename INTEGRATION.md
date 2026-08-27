@@ -18,10 +18,10 @@ The branch starts from `info-emait/QueryGantt@54f4cdb` (`v1.5.2`). The PR change
 
 | Pull request | Initial source commit(s) | Current focused PR tip | Initial commit(s) on this branch |
 | --- | --- | --- | --- |
-| #31 | `b7fa674`, `31d0de5` | `b5ead69` | `7959d4e`, `f1758f0` |
-| #33 | `31389d5` | `ff3f28a` | `3b9ccfb` |
-| #35 | `04f9775` | `8f84573` | `0622e6e` |
-| #37 | `c15a451` | `616c369` | `1924028` |
+| #31 | `b7fa674`, `31d0de5` | `9bd0f8c` | `7959d4e`, `f1758f0` |
+| #33 | `31389d5` | `9c8705e` | `3b9ccfb` |
+| #35 | `04f9775` | `19265b0` | `0622e6e` |
+| #37 | `c15a451` | `7046627` | `1924028` |
 | #39 | `a1377d4` | `a1377d4` | `cc55b1c` |
 
 The commit IDs differ because the changes were replayed onto one branch and integration conflicts were resolved there.
@@ -37,9 +37,9 @@ The first internally installed package exposed the following integration gaps, a
 
 A second production pass on 2026-08-24 found four follow-up gaps. Commits `21f6e8a`, `41bb788`, `195c410`, and `fd824a3` respectively add direction-aware page/timeline scrolling, apply successful backlog moves locally without a full query reload while batching expand/collapse redraws, hide stale bars outside the visible date window, and cap the selector at 400% while migrating an already saved 500% preference. Each change is also present in the focused PR tip listed above.
 
-A third production pass found intermittent Azure reorder rejections, two adjacent hit regions for one logical insertion boundary, and expand/collapse buttons that changed the entire tree at once. Commit `da22964` validates the proposed parent category and the current team's Area Paths before calling Azure (including the neighboring anchor IDs), exposes Azure's rejection detail when the server still refuses a request, canonicalizes an `after`/`before` row boundary to one blue line, and changes the hierarchy controls by exactly one visible level per click. The focused implementation is retained and extended by `ff3f28a` on PR #33; the other feature PRs are intentionally unchanged because these corrections belong entirely to backlog ordering.
+A third production pass found intermittent Azure reorder rejections, two adjacent hit regions for one logical insertion boundary, and expand/collapse buttons that changed the entire tree at once. Commit `da22964` validates the proposed parent category and the current team's Area Paths before calling Azure (including the neighboring anchor IDs), exposes Azure's rejection detail when the server still refuses a request, canonicalizes an `after`/`before` row boundary to one blue line, and changes the hierarchy controls by exactly one visible level per click. The focused implementation is retained and extended by `9c8705e` on PR #33; the other feature PRs are intentionally unchanged because these corrections belong entirely to backlog ordering.
 
-A fourth production pass on 2026-08-25 is addressed by `cc55b1c`. Backlog discovery no longer blocks the first query render; a remembered Backlog order shows `Loading…`, can recover from a transient `Unavailable` state without a page reload, and retries one stale `TF400486` operation after refreshing only the backlog index. Concrete work-item types now disambiguate invalid same-category and skipped-level parents, while valid Task-to-another-User-Story moves remain supported. Child destinations highlight the title in light green, `1 day` provides a width-aware daily zoom target, and timeline work-item titles use safe native new-tab navigation. Focused equivalents are `ff3f28a` on PR #33, `616c369` on PR #37, and the independent PR #39; PRs #31 and #35 are intentionally unchanged.
+A fourth production pass on 2026-08-25 is addressed by `cc55b1c`. Backlog discovery no longer blocks the first query render; a remembered Backlog order shows `Loading…`, can recover from a transient `Unavailable` state without a page reload, and retries one stale `TF400486` operation after refreshing only the backlog index. Concrete work-item types now disambiguate invalid same-category and skipped-level parents, while valid Task-to-another-User-Story moves remain supported. Child destinations highlight the title in light green, `1 day` provides a width-aware daily zoom target, and timeline work-item titles use safe native new-tab navigation. Focused equivalents are `9c8705e` on PR #33, `7046627` on PR #37, and the independent PR #39; PRs #31 and #35 are intentionally unchanged.
 
 A Windows build pass on 2026-08-27 exposed a test-only line-ending dependency in the child-drop LESS assertion. The integration test now normalizes CRLF and CR input before checking the exact selector structure. The equivalent correction belongs to PR #33 because that is the only focused PR containing the child-drop styling and regression test; PRs #31, #35, and #37 do not contain the affected assertion.
 
