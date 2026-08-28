@@ -1,6 +1,11 @@
 /node_modules
 /wwwroot
+/dist
+*.vsix
 /js/libs
+.env
+.env.*
+!.env.example
 package-lock.json
 fonts/AzDevMDL2.woff
 fonts/fabric-icons.woff

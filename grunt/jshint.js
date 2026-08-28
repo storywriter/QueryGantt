@@ -22,7 +22,7 @@ module.exports = function (grunt) {
             }
         },
         src: [
-            "gruntfile.js",
+            "gruntfile*.js",
             "grunt/**/*.js",
             "js/**/*.js",
             "!js/libs/**/*.js"

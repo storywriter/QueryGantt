@@ -1,7 +1,11 @@
 module.exports = function (grunt) {
     //#region [ Configuration ]
 
+    var extensionManifest = require("./lib/extension-manifest");
+    var overview = require("./lib/overview");
     var marketplaceExtensionId = grunt.config("extensionMarketplaceId") || grunt.config("package").name;
+    var extensionManifestOptions = grunt.config("extensionManifestOptions");
+    var extensionOverviewOptions = grunt.config("extensionOverviewOptions");
 
     grunt.config("copy", {
         dependencies: {
@@ -163,6 +167,15 @@ module.exports = function (grunt) {
             }]
         },
         md: {
+            options: {
+                process: function (content, srcpath) {
+                    if (srcpath.toLowerCase() === "overview.md") {
+                        return overview.transform(content, extensionOverviewOptions);
+                    }
+
+                    return content;
+                }
+            },
             files: [{
                 expand: true,
                 cwd: "",
@@ -183,11 +196,13 @@ module.exports = function (grunt) {
         config: {
             options: {
                 process: function (content, srcpath) {
-                    return content
+                    var processed = content
                         .replace(/#\{Project.AssemblyInfo.Version\}#/g, grunt.config("package").version)
                         .replace(/#\{Extension.MarketplaceId\}#/g, marketplaceExtensionId)
                         .replace(/#\{Extension.Id\}#/g, grunt.config("package").name)
                         .replace(/#\{Extension.Publisher\}#/g, grunt.config("package").author);
+
+                    return extensionManifest.transform(processed, extensionManifestOptions);
                 }
             },            
             files: [{
