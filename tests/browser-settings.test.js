@@ -22,6 +22,10 @@ assert.strictEqual(service.write("publisher.internal", "project-a", "dateGranula
 assert.strictEqual(service.read("publisher.internal", "project-a", "dateGranularity", null, storage), "day");
 assert.strictEqual(service.read("publisher.public", "project-a", "dateGranularity", null, storage), null, "different extension builds must not share preferences");
 
+assert.strictEqual(service.write("publisher.internal", "project-a", "timelineListWidth", null, 480, storage), true);
+assert.strictEqual(service.read("publisher.internal", "project-a", "timelineListWidth", null, storage), 480);
+assert.strictEqual(service.read("publisher.internal", "project-b", "timelineListWidth", null, storage), null, "layout preferences must be scoped per project");
+
 const view = { preset: "custom", start: "2026-08-21T00:00:00.000Z", end: "2026-08-28T00:00:00.000Z" };
 service.write("publisher.internal", "project-a", "zoomView", "query-a", view, storage);
 assert.deepStrictEqual(JSON.parse(JSON.stringify(service.read("publisher.internal", "project-a", "zoomView", "query-a", storage))), view);

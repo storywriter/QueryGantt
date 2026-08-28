@@ -15,6 +15,7 @@ define([
     "services/browser-settings",
     "services/date-granularity",
     "services/timeline-zoom",
+    "services/timeline-split",
     "services/icon",
     "my/templates/gantt",
     "my/components/legend",
@@ -23,7 +24,7 @@ define([
     "my/components/message",
     "my/components/filter",
     "my/components/zerodata"
-], function (module, require, polyfills, ko, bindings, sdk, xlsx, domtoimage, api, witApi, workApi, dataService, backlogOrderService, browserSettingsService, dateGranularityService, timelineZoomService, iconService, ganttTemplate) {
+], function (module, require, polyfills, ko, bindings, sdk, xlsx, domtoimage, api, witApi, workApi, dataService, backlogOrderService, browserSettingsService, dateGranularityService, timelineZoomService, timelineSplitService, iconService, ganttTemplate) {
     //#region [ Fields ]
 
     const global = (function () { return this; })();
@@ -69,6 +70,7 @@ define([
         this.dateGranularity = ko.observable(dateGranularityService.normalize(args.dateGranularity));
         this.zoomView = ko.observable(timelineZoomService.normalizeView(args.zoomView));
         this.zoomPreset = ko.observable(this.zoomView().preset);
+        this.listWidth = ko.observable(timelineSplitService.normalize(args.listWidth));
 
         this.isLoading = ko.observable(true);
         this.types = ko.observableArray([]);
@@ -833,6 +835,28 @@ define([
         this.zoomView(view);
         this.zoomPreset(view.preset);
         return this._saveZoomView(view);
+    };
+
+
+    /**
+     * Persists the work-item list width as an extension/project scoped browser
+     * preference after the user finishes moving the timeline splitter.
+     */
+    Model.prototype.listWidthChanged = function (width) {
+        width = timelineSplitService.normalize(width);
+        if (width === null) {
+            return false;
+        }
+
+        this.listWidth(width);
+        return browserSettingsService.write(
+            this.extensionId,
+            this.project.id,
+            "timelineListWidth",
+            null,
+            width,
+            this.browserStorage
+        );
     };
 
 
@@ -1665,8 +1689,10 @@ define([
                 const legacyZoomViews = parsedSettings.zoomViews && (typeof(parsedSettings.zoomViews) === "object") && !Array.isArray(parsedSettings.zoomViews) ? parsedSettings.zoomViews : {};
                 const browserGranularity = browserSettingsService.read(extensionId, project.id, "dateGranularity", null);
                 const browserZoomView = browserSettingsService.read(extensionId, project.id, "zoomView", zoomSettingsKey);
+                const browserListWidth = browserSettingsService.read(extensionId, project.id, "timelineListWidth", null);
                 dateGranularity = dateGranularityService.normalize(browserGranularity === null ? dateGranularity : browserGranularity);
                 const zoomView = timelineZoomService.normalizeView(browserZoomView === null ? legacyZoomViews[zoomSettingsKey] : browserZoomView);
+                const listWidth = timelineSplitService.normalize(browserListWidth);
 
                 // Migrate older Extension Data preferences into per-browser
                 // storage the first time this version is opened.
@@ -1695,6 +1721,7 @@ define([
                     orderMode,
                     dateGranularity,
                     zoomView,
+                    listWidth,
                     extensionId,
                     manager,
                     settings: parsedSettings,

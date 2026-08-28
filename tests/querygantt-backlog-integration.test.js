@@ -61,6 +61,9 @@ const dateGranularityService = {
 const timelineZoomService = {
     serializeView: function (value) { return value; }
 };
+const timelineSplitService = {
+    normalize: function (value) { return value == null ? null : Number(value); }
+};
 const browserWrites = [];
 const browserSettingsService = {
     write: function (extensionId, projectId, name, queryId, value) {
@@ -86,6 +89,7 @@ const app = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     "services/backlog-order": backlogOrderService,
     "services/browser-settings": browserSettingsService,
     "services/date-granularity": dateGranularityService,
+    "services/timeline-split": timelineSplitService,
     "services/timeline-zoom": timelineZoomService
 });
 const Model = app.Model;

@@ -36,6 +36,7 @@ const ko = {
 
 let zoomService = null;
 let dateService = null;
+let splitService = null;
 const loadService = function (filename, set) {
     vm.runInNewContext(fs.readFileSync(filename, "utf8"), {
         Date: Date, Number: Number, isNaN: isNaN,
@@ -44,9 +45,11 @@ const loadService = function (filename, set) {
 };
 loadService(path.join(__dirname, "../js/services/timeline-zoom.js"), (value) => zoomService = value);
 loadService(path.join(__dirname, "../js/services/date-granularity.js"), (value) => dateService = value);
+loadService(path.join(__dirname, "../js/services/timeline-split.js"), (value) => splitService = value);
 
 const listeners = {};
 const chartListeners = {};
+const splitListeners = {};
 let hitElement = null;
 const filter = { getBoundingClientRect: function () { return { top: 0, bottom: 48 }; } };
 const document = {
@@ -85,6 +88,15 @@ const targetElement = makeTargetElement(2, 100);
 const nextTargetElement = makeTargetElement(3, 130);
 
 const dropZone = { classList: makeClassList(), style: {} };
+const splitter = {
+    style: {}, attributes: {}, captured: null,
+    addEventListener: function (name, callback) { splitListeners[name] = callback; },
+    removeEventListener: function (name, callback) { if (splitListeners[name] === callback) { delete splitListeners[name]; } },
+    setAttribute: function (name, value) { this.attributes[name] = value; },
+    setPointerCapture: function (id) { this.captured = id; },
+    hasPointerCapture: function (id) { return this.captured === id; },
+    releasePointerCapture: function () { this.captured = null; }
+};
 let axisTop = -20;
 const axis = {
     getBoundingClientRect: function () { return { top: axisTop, left: 420, width: 600, height: 44 }; },
@@ -122,6 +134,7 @@ const root = {
     querySelector: function (selector) {
         if (selector === ".my-timeline__root-drop-zone") { return dropZone; }
         if (selector === ".my-timeline__chart") { return chart; }
+        if (selector === ".my-timeline__splitter") { return splitter; }
         if (selector === "[data-backlog-drop-position]") {
             return [targetElement, nextTargetElement].find((element) => element.attributes["data-backlog-drop-position"]) || null;
         }
@@ -138,6 +151,7 @@ vm.runInNewContext(source, {
         factory.apply(null, dependencies.map(function (name) {
             if (name === "knockout") { return ko; }
             if (name === "services/date-granularity") { return dateService; }
+            if (name === "services/timeline-split") { return splitService; }
             if (name === "services/timeline-zoom") { return zoomService; }
             if (name === "vis-timeline") { return {}; }
             return function () {};
@@ -146,10 +160,15 @@ vm.runInNewContext(source, {
 });
 
 let move = null;
+let savedListWidth = null;
 const viewModel = ko.registration.viewModel.createViewModel({
     items: observable([]), backlogOrder: observable(true), states: observable([]), priorities: observable([]),
     types: observable([]), typesOther: observable([]), icons: observable({}), showFields: observable([]),
-    callbacks: { reorderWit: function (value) { move = value; return Promise.resolve(true); } }, actions: {}
+    listWidth: observable(null),
+    callbacks: {
+        reorderWit: function (value) { move = value; return Promise.resolve(true); },
+        listWidthChanged: function (value) { savedListWidth = value; }
+    }, actions: {}
 }, { element: { firstChild: root, querySelector: function () {} } });
 
 const groupUpdates = [];

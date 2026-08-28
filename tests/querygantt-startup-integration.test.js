@@ -70,6 +70,7 @@ const loadService = function (name) {
 
 const backlogOrderService = loadService("backlog-order");
 const dateGranularityService = loadService("date-granularity");
+const timelineSplitService = loadService("timeline-split");
 const timelineZoomService = loadService("timeline-zoom");
 
 const app = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
@@ -78,6 +79,7 @@ const app = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     sdk: {},
     "services/backlog-order": backlogOrderService,
     "services/date-granularity": dateGranularityService,
+    "services/timeline-split": timelineSplitService,
     "services/timeline-zoom": timelineZoomService
 }, true);
 
@@ -254,6 +256,7 @@ singleDateFilter.dispose();
         "api/index": navigationApi,
         "services/backlog-order": backlogOrderService,
         "services/date-granularity": dateGranularityService,
+        "services/timeline-split": timelineSplitService,
         "services/timeline-zoom": timelineZoomService
     }, true);
     const queryStringModel = {
@@ -325,6 +328,7 @@ singleDateFilter.dispose();
         "services/backlog-order": backlogOrderService,
         "services/browser-settings": { write: function () { return true; } },
         "services/date-granularity": dateGranularityService,
+        "services/timeline-split": timelineSplitService,
         "services/timeline-zoom": timelineZoomService,
         "services/icon": { fetch: function () { return new Promise(function () {}); } },
         __fetch: function () {

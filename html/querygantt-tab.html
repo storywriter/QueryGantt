@@ -140,11 +140,13 @@
                                                     showFields: showFields,
                                                     dateGranularity: dateGranularity,
                                                     zoomView: zoomView,
+                                                    listWidth: listWidth,
                                                     callbacks: {
                                                         openNewWindow: openNewWindow.bind($root),
                                                         updateWit: updateWit.bind($root),
                                                         reorderWit: reorderWit.bind($root),
-                                                        zoomChanged: zoomChanged.bind($root)
+                                                        zoomChanged: zoomChanged.bind($root),
+                                                        listWidthChanged: listWidthChanged.bind($root)
                                                     },
                                                     actions: {
                                                         expand: _timeline_expandAction,

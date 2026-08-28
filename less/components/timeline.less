@@ -3,6 +3,10 @@
 .my-timeline {
     position: relative;
 
+    &__chart {
+        width: 100%;
+    }
+
     &__root-drop-zone {
         display: none;
         position: fixed;
@@ -20,6 +24,34 @@
         &--active {
             border-style: solid;
             background-color: rgba(var(--palette-primary-tint-30, 222, 236, 249), 1);
+        }
+    }
+
+    &__splitter {
+        display: none;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: rem(12px);
+        margin-left: rem(-6px);
+        z-index: 2;
+        cursor: col-resize;
+        touch-action: none;
+        outline: none;
+
+        &:before {
+            content: "";
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: rem(5px);
+            width: rem(2px);
+            background-color: transparent;
+        }
+
+        &:hover:before,
+        &:focus:before {
+            background-color: var(--component-grid-focus-border-color, rgba(var(--palette-primary), 1));
         }
     }
 

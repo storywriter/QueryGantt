@@ -130,6 +130,7 @@ const loadAmd = function (filename, dependencies, exposeModel) {
 const dateGranularityService = loadService("date-granularity");
 const backlogOrderService = loadService("backlog-order");
 const browserSettingsService = loadService("browser-settings");
+const timelineSplitService = loadService("timeline-split");
 const timelineZoomService = loadService("timeline-zoom");
 
 let timelineRegistration = null;
@@ -180,6 +181,12 @@ const createTimelineElement = function (chartWidth) {
         classList: { add: function () {}, remove: function () {}, contains: function () { return false; } },
         style: {}
     };
+    const splitter = {
+        style: {},
+        addEventListener: function () {},
+        removeEventListener: function () {},
+        setAttribute: function () {}
+    };
     const chart = { clientWidth: chartWidth || 1200, querySelector: function () { return null; } };
     const root = {
         classList: { add: function () {}, remove: function () {} },
@@ -187,7 +194,9 @@ const createTimelineElement = function (chartWidth) {
         closest: function () { return null; },
         contains: function () { return true; },
         querySelector: function (selector) {
-            return selector === ".my-timeline__root-drop-zone" ? dropZone : chart;
+            if (selector === ".my-timeline__root-drop-zone") { return dropZone; }
+            if (selector === ".my-timeline__splitter") { return splitter; }
+            return chart;
         }
     };
     return { element: { firstChild: root, querySelector: function () {} }, chart: chart };
@@ -196,6 +205,7 @@ const createTimelineElement = function (chartWidth) {
 loadAmd(path.join(__dirname, "../js/components/timeline.js"), {
     knockout: timelineKnockout,
     "services/date-granularity": dateGranularityService,
+    "services/timeline-split": timelineSplitService,
     "services/timeline-zoom": timelineZoomService,
     "vis-timeline": { DataSet: DataSet, Timeline: TimelineStub },
     "vis-timeline-arrow": function () {}
@@ -365,6 +375,7 @@ const appLoader = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     "services/backlog-order": backlogOrderService,
     "services/browser-settings": browserSettingsService,
     "services/date-granularity": dateGranularityService,
+    "services/timeline-split": timelineSplitService,
     "services/timeline-zoom": timelineZoomService
 }, true);
 appLoader.result.Model.prototype.init = function () { return Promise.resolve(); };
