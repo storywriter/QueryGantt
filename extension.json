@@ -1,6 +1,6 @@
 {
     "manifestVersion": 1,
-    "id": "#{Extension.Id}#",
+    "id": "#{Extension.MarketplaceId}#",
     "version": "#{Project.AssemblyInfo.Version}#",
     "name": "Query Gantt",
     "description": "Query Gantt enables you to view the selected query results in the form of a Gantt chart.",
@@ -78,7 +78,7 @@
         "constraints": [{
             "name": "Feature",
             "properties": {
-                "featureId": "#{Extension.Publisher}#.#{Extension.Id}#.#{Extension.Id}#-feature"
+                "featureId": "#{Extension.Publisher}#.#{Extension.MarketplaceId}#.#{Extension.Id}#-feature"
             }
         }]
     }, {

@@ -1,6 +1,8 @@
 module.exports = function (grunt) {
     //#region [ Configuration ]
 
+    var marketplaceExtensionId = grunt.config("extensionMarketplaceId") || grunt.config("package").name;
+
     grunt.config("copy", {
         dependencies: {
             options: {
@@ -183,6 +185,7 @@ module.exports = function (grunt) {
                 process: function (content, srcpath) {
                     return content
                         .replace(/#\{Project.AssemblyInfo.Version\}#/g, grunt.config("package").version)
+                        .replace(/#\{Extension.MarketplaceId\}#/g, marketplaceExtensionId)
                         .replace(/#\{Extension.Id\}#/g, grunt.config("package").name)
                         .replace(/#\{Extension.Publisher\}#/g, grunt.config("package").author);
                 }
