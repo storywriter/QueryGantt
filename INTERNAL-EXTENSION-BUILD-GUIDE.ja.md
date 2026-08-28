@@ -192,11 +192,33 @@ node -e "const m=require('./wwwroot/vss-extension.json');const f=m.contributions
 test -f wwwroot/html/querygantt-tab.html
 test -f wwwroot/js/querygantt-tab.js
 test -f wwwroot/css/querygantt-tab.css
-grep -R -n -F '#{' wwwroot --include='*.json' --include='*.html' --include='*.js' --include='*.css' --include='*.md'
-grep -R -n -E 'YOUR_[A-Z0-9_]+' wwwroot
+
+verify_no_matches() {
+    if "$@"; then
+        echo "NG: unexpected value found"
+        return 1
+    else
+        grep_status=$?
+        if [ "$grep_status" -eq 1 ]; then
+            echo "OK: no matches"
+            return 0
+        fi
+        return "$grep_status"
+    fi
+}
+
+verify_no_matches grep -R -n -F \
+    --include='*.json' --include='*.html' --include='*.js' \
+    --include='*.css' --include='*.md' \
+    '#{' wwwroot
+
+verify_no_matches grep -R -n -E \
+    --include='*.json' --include='*.html' --include='*.js' \
+    --include='*.css' --include='*.md' \
+    'YOUR_[A-Z0-9_]+' wwwroot
 ```
 
-最後の2つの `grep` は何も表示されないことが正常です。
+最後の2つの検査がどちらも `OK: no matches` と表示されることが正常です。未置換値が見つかった場合は該当箇所と `NG: unexpected value found` を表示して終了コード1、不正なオプションや読み取りエラーの場合は `grep` の終了コードをそのまま返します。
 
 `wwwroot/Overview.md` も開き、noticeとSupport本文が `.env` の指定どおりになっていることを確認します。
 
