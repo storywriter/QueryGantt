@@ -23,7 +23,7 @@ const definitions = service.mergeDefinitions([
     { name: "Title", referenceName: "System.Title", type: 0, usage: 1 },
     { name: "Assigned To", referenceName: "System.AssignedTo", type: 10, usage: 1 },
     { name: "Custom Score", referenceName: "Custom.Score", type: 7, usage: 1 },
-    { name: "Acceptance Criteria", referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria", type: 4, usage: 1 },
+    { name: "Acceptance Criteria", referenceName: "Microsoft.VSTS.Common.AcceptanceCriteria", type: "html", usage: "workItem" },
     { name: "Deleted", referenceName: "Custom.Deleted", type: 0, usage: 1, isDeleted: true },
     { name: "Link Comment", referenceName: "System.Links.Comment", type: 0, usage: 2 }
 ], ["duration", "field:Custom.Missing"]);
@@ -45,6 +45,8 @@ assert.strictEqual(service.formatValue({ displayName: "Ada Lovelace", uniqueName
 assert.strictEqual(service.formatValue(["One", "Two"], { type: 0 }), "One, Two");
 assert.strictEqual(service.formatValue(false, { type: 9 }), "False");
 assert.strictEqual(service.formatValue("<p>Hello <strong>world</strong></p><br>Next &amp; last", { type: 4 }), "Hello world Next & last");
+assert.strictEqual(service.formatValue("<p>String enum</p>", { type: "html" }), "String enum",
+    "REST string enum values should be handled as well as SDK numeric enum values");
 assert.strictEqual(service.escapeHtml("<img src=x onerror='bad'>&\""), "&lt;img src=x onerror=&#39;bad&#39;&gt;&amp;&quot;",
     "arbitrary field values must be escaped because the legacy timeline disables its XSS filter");
 

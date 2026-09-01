@@ -5,6 +5,15 @@ define([], () => {
     const workItemUsage = 1;
     const htmlFieldType = 4;
 
+    const isWorkItemUsage = function (usage) {
+        return usage === undefined || usage === null || usage === workItemUsage
+            || String(usage).toLowerCase() === "workitem";
+    };
+
+    const isHtmlFieldType = function (type) {
+        return type === htmlFieldType || String(type).toLowerCase() === "html";
+    };
+
     // These Azure fields already have backwards-compatible Query Gantt
     // columns. Do not show a second, indistinguishable option for them.
     const legacyReferenceNames = {
@@ -63,7 +72,7 @@ define([], () => {
 
         (azureFields || [])
             .filter((field) => field && field.referenceName && !field.isDeleted
-                && (field.usage === undefined || field.usage === workItemUsage)
+                && isWorkItemUsage(field.usage)
                 && field.referenceName !== "System.Title"
                 && !legacyReferenceNames[field.referenceName])
             .slice()
@@ -148,7 +157,7 @@ define([], () => {
         }
 
         let text = String(value);
-        if (definition && definition.type === htmlFieldType) {
+        if (definition && isHtmlFieldType(definition.type)) {
             text = text
                 .replace(/<\s*br\s*\/?>/gi, " ")
                 .replace(/<\s*\/p\s*>/gi, " ")
