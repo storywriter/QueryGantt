@@ -96,11 +96,11 @@
         }
 
         &__dividier {
-            flex: 1;
+            flex: 0 0 0;
         }
 
         &__title {
-            flex: 0 1 auto;
+            flex: 1 1 0;
             min-width: 0;
             overflow: hidden;
             text-overflow: clip;
@@ -122,6 +122,7 @@
             display: flex;
             flex-direction: row;
             flex-wrap: nowrap;
+            overflow: hidden;
 
             > div {
                 font-size: rem(12px);
@@ -199,6 +200,11 @@
             
             &--assignedto {
                 width: rem(125px);
+            }
+
+            &--tags,
+            &--field {
+                width: rem(160px);
             }
         }
 
@@ -459,6 +465,7 @@
 
         &-inner {
             flex: 1;
+            box-sizing: border-box;
             min-width: 0;
             width: 100%;
         }

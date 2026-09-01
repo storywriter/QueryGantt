@@ -70,6 +70,7 @@ const loadService = function (name) {
 
 const backlogOrderService = loadService("backlog-order");
 const dateGranularityService = loadService("date-granularity");
+const fieldColumnsService = loadService("field-columns");
 const timelineSplitService = loadService("timeline-split");
 const timelineZoomService = loadService("timeline-zoom");
 
@@ -79,6 +80,7 @@ const app = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     sdk: {},
     "services/backlog-order": backlogOrderService,
     "services/date-granularity": dateGranularityService,
+    "services/field-columns": fieldColumnsService,
     "services/timeline-split": timelineSplitService,
     "services/timeline-zoom": timelineZoomService
 }, true);
@@ -256,6 +258,7 @@ singleDateFilter.dispose();
         "api/index": navigationApi,
         "services/backlog-order": backlogOrderService,
         "services/date-granularity": dateGranularityService,
+        "services/field-columns": fieldColumnsService,
         "services/timeline-split": timelineSplitService,
         "services/timeline-zoom": timelineZoomService
     }, true);
@@ -279,7 +282,10 @@ singleDateFilter.dispose();
 
     let resolveBacklogs = null;
     const delayedBacklogs = new Promise((resolve) => resolveBacklogs = resolve);
-    const witApi = { WorkItemTrackingRestClient: function WorkItemTrackingRestClient() {} };
+    const witApi = {
+        WorkItemTrackingRestClient: function WorkItemTrackingRestClient() {},
+        GetFieldsExpand: { ExtensionFields: 1 }
+    };
     const workApi = { WorkRestClient: function WorkRestClient() {} };
     const workClient = {
         getBacklogs: function () { return delayedBacklogs; },
@@ -289,6 +295,11 @@ singleDateFilter.dispose();
     };
     const witClient = {
         _options: { rootPath: Promise.resolve("https://dev.azure.com/example/") },
+        getFields: function (projectId, expand) {
+            assert.strictEqual(projectId, "project-id");
+            assert.strictEqual(expand, 1, "extension/custom fields should be included in field discovery");
+            return Promise.resolve([{ name: "Custom Score", referenceName: "Custom.Score", type: 7, usage: 1 }]);
+        },
         queryByWiql: function () { return Promise.resolve({ queryType: 1, sortColumns: [], workItems: [{ id: 1 }] }); },
         getWorkItems: function () {
             return Promise.resolve([{
@@ -308,6 +319,7 @@ singleDateFilter.dispose();
                     "System.ChangedBy": { displayName: "Changer" },
                     "System.CreatedDate": "2026-08-01T00:00:00.000Z",
                     "System.ChangedDate": "2026-08-01T00:00:00.000Z",
+                    "Custom.Score": 42,
                     "Microsoft.VSTS.Common.StackRank": 100
                 },
                 relations: []
@@ -328,6 +340,7 @@ singleDateFilter.dispose();
         "services/backlog-order": backlogOrderService,
         "services/browser-settings": { write: function () { return true; } },
         "services/date-granularity": dateGranularityService,
+        "services/field-columns": fieldColumnsService,
         "services/timeline-split": timelineSplitService,
         "services/timeline-zoom": timelineZoomService,
         "services/icon": { fetch: function () { return new Promise(function () {}); } },
@@ -354,6 +367,8 @@ singleDateFilter.dispose();
     ]);
     assert.strictEqual(renderedWithoutBacklog, true, "slow backlog discovery must not block the first query render");
     assert.strictEqual(asyncModel.wits().length, 1);
+    assert.strictEqual(asyncModel.wits()[0].fieldValues["Custom.Score"], 42, "raw arbitrary values should reach the timeline model");
+    assert.ok(asyncModel.fields().some((field) => field.value === "field:Custom.Score"), "discovered fields should be selectable in Column options");
     assert.strictEqual(asyncModel.backlogAvailable(), false);
 
     resolveBacklogs([{ id: "tasks", rank: 0, isHidden: false, workItemTypes: [{ name: "Task" }] }]);

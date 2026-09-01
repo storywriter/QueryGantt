@@ -37,6 +37,7 @@ const ko = {
 let zoomService = null;
 let dateService = null;
 let splitService = null;
+let fieldColumnsService = null;
 const loadService = function (filename, set) {
     vm.runInNewContext(fs.readFileSync(filename, "utf8"), {
         Date: Date, Number: Number, isNaN: isNaN,
@@ -46,6 +47,7 @@ const loadService = function (filename, set) {
 loadService(path.join(__dirname, "../js/services/timeline-zoom.js"), (value) => zoomService = value);
 loadService(path.join(__dirname, "../js/services/date-granularity.js"), (value) => dateService = value);
 loadService(path.join(__dirname, "../js/services/timeline-split.js"), (value) => splitService = value);
+loadService(path.join(__dirname, "../js/services/field-columns.js"), (value) => fieldColumnsService = value);
 
 const listeners = {};
 const chartListeners = {};
@@ -151,6 +153,7 @@ vm.runInNewContext(source, {
         factory.apply(null, dependencies.map(function (name) {
             if (name === "knockout") { return ko; }
             if (name === "services/date-granularity") { return dateService; }
+            if (name === "services/field-columns") { return fieldColumnsService; }
             if (name === "services/timeline-split") { return splitService; }
             if (name === "services/timeline-zoom") { return zoomService; }
             if (name === "vis-timeline") { return {}; }
@@ -257,6 +260,7 @@ viewModel.timeline = liveTimeline;
 viewModel._renderContext = {
     states: viewModel.states(), priorities: viewModel.priorities(), types: viewModel.types(),
     typesOther: viewModel.typesOther(), icons: viewModel.icons(), showFields: viewModel.showFields(),
+    fieldDefinitions: viewModel.fieldDefinitions(),
     backlogOrder: viewModel.backlogOrder(), dateGranularity: dateService.normalize(viewModel.dateGranularity())
 };
 viewModel._dependenciesKey = viewModel._getDependenciesKey(reorderedItems);

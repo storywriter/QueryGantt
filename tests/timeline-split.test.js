@@ -30,6 +30,7 @@ const loadService = function (name) {
     return result;
 };
 const dateGranularityService = loadService("date-granularity");
+const fieldColumnsService = loadService("field-columns");
 const timelineZoomService = loadService("timeline-zoom");
 
 const observable = function (initial) {
@@ -152,6 +153,7 @@ vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../js/components/timeli
         factory.apply(null, dependencies.map(function (name) {
             if (name === "knockout") { return ko; }
             if (name === "services/date-granularity") { return dateGranularityService; }
+            if (name === "services/field-columns") { return fieldColumnsService; }
             if (name === "services/timeline-split") { return service; }
             if (name === "services/timeline-zoom") { return timelineZoomService; }
             if (name === "vis-timeline") { return {}; }

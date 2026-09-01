@@ -131,6 +131,7 @@ const plain = function (value) { return JSON.parse(JSON.stringify(value)); };
 const zoomService = loadService("timeline-zoom");
 const timelineSplitService = loadService("timeline-split");
 const dateGranularityService = loadService("date-granularity");
+const fieldColumnsService = loadService("field-columns");
 const backlogOrderService = loadService("backlog-order");
 const browserSettingsService = loadService("browser-settings");
 
@@ -199,6 +200,7 @@ const createTimelineElement = function () {
 loadAmd(path.join(__dirname, "../js/components/timeline.js"), {
     knockout: timelineKnockout,
     "services/date-granularity": dateGranularityService,
+    "services/field-columns": fieldColumnsService,
     "services/timeline-split": timelineSplitService,
     "services/timeline-zoom": zoomService,
     "vis-timeline": { DataSet: DataSet, Timeline: TimelineStub },
@@ -268,6 +270,7 @@ const appModule = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     "services/backlog-order": backlogOrderService,
     "services/browser-settings": browserSettingsService,
     "services/date-granularity": dateGranularityService,
+    "services/field-columns": fieldColumnsService,
     "services/timeline-split": timelineSplitService,
     "services/timeline-zoom": zoomService
 }, true).result;
@@ -324,7 +327,7 @@ assert.strictEqual(appModel.zoomPreset(), "300");
         "api/index": { CommonServiceIds: commonServiceIds }, "api/WorkItemTracking/index": {}, "api/Work/index": {},
         "services/data": { getManager: function () { return Promise.resolve(manager); } },
         "services/backlog-order": backlogOrderService, "services/browser-settings": browserSettingsService,
-        "services/date-granularity": dateGranularityService, "services/timeline-split": timelineSplitService,
+        "services/date-granularity": dateGranularityService, "services/field-columns": fieldColumnsService, "services/timeline-split": timelineSplitService,
         "services/timeline-zoom": zoomService
     }, true);
     startupLoader.result.Model.prototype.init = function () { return Promise.resolve(); };

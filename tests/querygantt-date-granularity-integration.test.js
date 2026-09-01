@@ -130,6 +130,7 @@ const loadAmd = function (filename, dependencies, exposeModel) {
 const dateGranularityService = loadService("date-granularity");
 const backlogOrderService = loadService("backlog-order");
 const browserSettingsService = loadService("browser-settings");
+const fieldColumnsService = loadService("field-columns");
 const timelineSplitService = loadService("timeline-split");
 const timelineZoomService = loadService("timeline-zoom");
 
@@ -205,6 +206,7 @@ const createTimelineElement = function (chartWidth) {
 loadAmd(path.join(__dirname, "../js/components/timeline.js"), {
     knockout: timelineKnockout,
     "services/date-granularity": dateGranularityService,
+    "services/field-columns": fieldColumnsService,
     "services/timeline-split": timelineSplitService,
     "services/timeline-zoom": timelineZoomService,
     "vis-timeline": { DataSet: DataSet, Timeline: TimelineStub },
@@ -270,6 +272,29 @@ assert.strictEqual(capture.instance.setOptionsCalls[0].zoomMin, dateGranularityS
 assert.strictEqual(capture.options.verticalScroll, false, "work items should use the page's full-height scroll area");
 assert.deepStrictEqual(JSON.parse(JSON.stringify(capture.options.orientation)), { axis: "top", item: "top" }, "only the floating top date axis should be rendered");
 
+const customElement = createTimelineElement();
+const customItem = makeItem(3, 8, 0);
+customItem.fieldValues = { "Custom.Note": "<img src=x onerror='bad'>Safe text" };
+const customTimeline = timelineRegistration.viewModel.createViewModel({
+    items: observable([customItem]),
+    states: observable([]),
+    priorities: observable([{ name: "Should have", value: 2, color: "fbe74b" }]),
+    types: observable([{ name: "Task", color: "f2cb1d", icon: { url: "task.svg" }, states: [{ name: "New", color: "cccccc" }] }]),
+    typesOther: observable([]),
+    icons: observable({ "task.svg": "<svg></svg>" }),
+    showFields: observable(["field:Custom.Note", "duration"]),
+    fieldDefinitions: observable([{ name: "Custom Note", value: "field:Custom.Note", referenceName: "Custom.Note", type: 0 }]),
+    dateGranularity: observable("day"),
+    actions: {}
+}, customElement);
+customTimeline._onItemsChanged();
+const customCapture = timelineCaptures[timelineCaptures.length - 1];
+const customGroup = customCapture.options.groupTemplate(customCapture.groups.data[0]);
+assert.ok(customGroup.innerHTML.includes("&lt;img src=x onerror=&#39;bad&#39;&gt;Safe text"), "arbitrary field HTML must be rendered as escaped text");
+assert.ok(customGroup.innerHTML.indexOf("my-timeline-group__content--field") < customGroup.innerHTML.indexOf("my-timeline-group__content--duration"),
+    "timeline columns should follow the order selected in Column options");
+customTimeline.dispose();
+
 const insideElement = { style: {} };
 const outsideElement = { style: {} };
 capture.instance.itemSet = { items: {
@@ -306,7 +331,8 @@ const configurationModule = loadAmd(path.join(__dirname, "../js/querygantt-confi
     "api/index": { CommonServiceIds: {} },
     "services/data": { getManager: function () { return Promise.resolve(settingsManager); } },
     "services/browser-settings": browserSettingsService,
-    "services/date-granularity": dateGranularityService
+    "services/date-granularity": dateGranularityService,
+    "services/field-columns": fieldColumnsService
 }, true).result;
 const configurationModel = new configurationModule.Model({
     project: { id: "project-id" },
@@ -375,6 +401,7 @@ const appLoader = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     "services/backlog-order": backlogOrderService,
     "services/browser-settings": browserSettingsService,
     "services/date-granularity": dateGranularityService,
+    "services/field-columns": fieldColumnsService,
     "services/timeline-split": timelineSplitService,
     "services/timeline-zoom": timelineZoomService
 }, true);
