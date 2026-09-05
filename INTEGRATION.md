@@ -1,4 +1,4 @@
-# Integration notes for PRs #31, #33, #35, #37, and #39
+# Integration notes for PRs #31, #33, #35, #37, #39, #42, #43, and #44
 
 This branch combines the following pull requests so their interactions can be reviewed and tested in one place:
 
@@ -7,10 +7,13 @@ This branch combines the following pull requests so their interactions can be re
 - [#35: Add configurable timeline date granularity](https://github.com/info-emait/QueryGantt/pull/35)
 - [#37: Persist timeline zoom and add zoom presets](https://github.com/info-emait/QueryGantt/pull/37)
 - [#39: Always open timeline work items in a new tab](https://github.com/info-emait/QueryGantt/pull/39)
+- [#42: Clip overflowing work item titles at the column boundary](https://github.com/info-emait/QueryGantt/pull/42)
+- [#43: Add a persistent resizable timeline split](https://github.com/info-emait/QueryGantt/pull/43)
+- [#44: Add configurable work item field columns](https://github.com/info-emait/QueryGantt/pull/44)
 
 Branch: [storywriter/QueryGantt:internal/integrated-querygantt](https://github.com/storywriter/QueryGantt/tree/internal/integrated-querygantt)
 
-This is an integration and reference branch, not a replacement for reviewing and merging the four focused pull requests individually. The individual PR branches remain the authoritative isolated changes.
+This is an integration and reference branch, not a replacement for reviewing and merging the focused pull requests individually. The individual PR branches remain the authoritative isolated changes.
 
 ## Integration basis and order
 
@@ -18,11 +21,14 @@ The branch starts from `info-emait/QueryGantt@54f4cdb` (`v1.5.2`). The PR change
 
 | Pull request | Initial source commit(s) | Current focused PR tip | Initial commit(s) on this branch |
 | --- | --- | --- | --- |
-| #31 | `b7fa674`, `31d0de5` | `9bd0f8c` | `7959d4e`, `f1758f0` |
-| #33 | `31389d5` | `9c8705e` | `3b9ccfb` |
-| #35 | `04f9775` | `19265b0` | `0622e6e` |
-| #37 | `c15a451` | `7046627` | `1924028` |
+| #31 | `b7fa674`, `31d0de5` | `247b4c6` | `7959d4e`, `f1758f0` |
+| #33 | `31389d5` | `f42c1ab` | `3b9ccfb` |
+| #35 | `04f9775` | `e5fbd91` | `0622e6e` |
+| #37 | `c15a451` | `6c619f6` | `1924028` |
 | #39 | `a1377d4` | `a1377d4` | `cc55b1c` |
+| #42 | `6730423` | `4cdee3e` | `aa95ab1` |
+| #43 | `2486d5f` | `2486d5f` | `57760f4` |
+| #44 | `1e80150` | `b36f6cd` | `3cc5d05` |
 
 The commit IDs differ because the changes were replayed onto one branch and integration conflicts were resolved there.
 
@@ -45,11 +51,14 @@ A Windows build pass on 2026-08-27 exposed a test-only line-ending dependency in
 
 A fifth production pass on 2026-08-27 found two host-state regressions. Commit `58bac16` serializes visible-column query-string writes and skips `HostNavigationService.setQueryParams` when `showFields` is already unchanged; this prevents Azure DevOps from repeatedly reloading the extension iframe in response to a no-op initial Knockout notification. Commit `0d921c5` updates the existing vis-timeline group/item DataSets after an accepted Backlog move when the rendered IDs and dependency graph are unchanged, instead of destroying and recreating the timeline. It preserves each node's expanded/collapsed state, descendant visibility, the current date window, and page scroll position. The URL guard is carried by PRs #31, #33, #35, and #37 because it protects every independently installable feature branch; the in-place hierarchy update belongs only to PR #33.
 
+A sixth production pass on 2026-09-02 is addressed by `af655af`, `da7ed6a`, `275d7c9`, and `690389a`. Mixed siblings with and without a process Order value now use one transitive ordering rule, and reorder anchors use that same visible order. The floating date axis measures the complete sticky alert/filter region, fixing the regression caused when the filter became a margin-offset child of that region. The redundant zoom-reset command is replaced by a direct **Jump to today** action that retains the current zoom, and the field configuration entry point now matches Azure Backlogs with a wrench icon and **Column Options** label. Focused equivalents are `247b4c6` on PR #31, `f42c1ab` on PR #33, `6c619f6` on PR #37, and `b36f6cd` on PR #44. PRs #35, #42, and #43 were reviewed and intentionally left unchanged because they do not own these behaviors; their combinations are covered by this branch's complete suite and builds.
+
 ## Integration decisions
 
 - Let the Azure DevOps page scroll the naturally expanded Work Item rows. Only the top date axis is rendered; a read-only fixed mirror keeps it below the sticky filter after its original position scrolls away. PNG export renders the already expanded timeline without changing the user's scroll state.
 - Keep vertical wheel and dominant vertical background-drag input on the page scroll container. Native horizontal trackpad input, Shift + wheel, and dominant horizontal background drags pan the date range.
 - Use pointer-driven backlog drag handling so vis-timeline's gesture handling cannot swallow native drag events. Query items omitted from the Backlog API, including completed items, are associated with their process-specific Order field and remain eligible for reorder operations.
+- Within one sibling group, place entries with a process Order value first in ascending order, then entries without that value in Backlog API order. Use the same total order for rendering and reorder-neighbor selection so a mix of ranked and unranked Work Items cannot produce cyclic comparisons.
 - Before a reorder write, require the proposed parent to be in the immediately higher backlog category (or root), and require the moved item, target, and neighboring reorder anchors to belong to the current team's configured Area Paths. An item with an invalid current parent can still be moved to root or a valid parent to repair the hierarchy.
 - Treat the lower half of one sibling row and the upper half of the next sibling row as one insertion boundary, rendered as one blue line. Expand and collapse buttons reveal or hide one visible hierarchy level per click, matching Azure Boards.
 - After Azure accepts a backlog move, update the cloned backlog index, query path, parent metadata, and child counts locally instead of calling `refresh()`. Invalid or rejected moves leave local state unchanged. Expand/collapse sends one DataSet batch rather than one redraw per Work Item.
@@ -59,6 +68,8 @@ A fifth production pass on 2026-08-27 found two host-state regressions. Commit `
 - Reconcile rendered item DOM with the current visible date window after initial draw and range changes so stale out-of-window bars cannot remain pinned at an edge.
 - Keep visible columns and backlog sort mode in Azure Extension Data as before. Keep timeline granularity and zoom in browser-local storage, scoped by extension, project, and (for zoom) query, so public/internal installations and different queries do not overwrite each other.
 - Define zoom presets as data-relative magnifications: `100%` fits all data, while `200%` through `400%` show progressively smaller windows. `1 day` derives a window from the drawable timeline width so each day receives a minor-axis label. Arbitrary wheel/pinch/button zoom is stored as `Custom`.
+- Use **Jump to today** to center the current visible window on the current date without changing its zoom. `100%` remains available from the preset selector, so there is no separate reset command.
+- Present configurable field settings as a wrench-labelled **Column Options** command, matching the corresponding Azure Backlogs affordance.
 - In `Day` granularity, set and resize a width-aware `zoomMin` so vis-timeline cannot switch to an hour/minute axis. `Hours and minutes` retains the original unrestricted behavior.
 - Open timeline work-item titles through native `target="_blank"` anchors with `noopener noreferrer`; stop propagation to vis-timeline without cancelling browser navigation.
 - Observe backlog order, date granularity, and zoom together when constructing or updating the timeline.
@@ -68,14 +79,18 @@ If the focused PRs are merged separately, the suggested feature order is #31, #3
 
 ## Validation
 
-Last rerun on 2026-08-27:
+Latest rerun on 2026-09-06:
 
-- `npm test`: all 9 Node test suites passed.
+- `npm test`: all 14 Node test suites passed, including mixed ranked/unranked Backlog siblings, display/reorder-anchor agreement, **Jump to today**, toolbar markup, and floating-axis scroll behavior in both Query and Backlog order modes.
+- `npx grunt app-build:Debug`: passed, including JSHint for 44 files.
+- `npx grunt app-build:Release`: passed, including JSHint for 44 files, CSS minification, and JavaScript minification.
+- PR #31 independently passed 3 Node suites and its Debug build (33 JSHint files); PR #33 passed 5 suites and Debug (34 files); PR #35 passed 5 suites and Debug (35 files); PR #37 passed 5 suites and Debug (35 files); PR #42 passed 1 suite and Debug (33 files); PR #43 passed 2 suites and Debug (35 files); and PR #44 passed 2 suites and Debug (34 files).
+
+The following browser, time-zone, and input checks are retained from the 2026-08-27 integration validation:
+
 - The timeline interaction suite also passed while its LESS input was forced to Windows CRLF line endings.
 - Date-granularity unit and integration suites passed under both `America/New_York` and `Asia/Tokyo` time zones.
-- `npx grunt app-build:Debug`: passed, including JSHint for 37 files.
-- `npx grunt app-build:Release`: passed, including JSHint for 37 files, CSS minification, and JavaScript minification.
-- Browser checks against the actual Release-built component and bundled vis-timeline 8.5.0: all 22 automated integrated checks passed with zero runtime errors.
+- Browser checks against the actual Release-built component and bundled vis-timeline 8.5.0 passed all 22 automated integrated checks with zero runtime errors.
 - Real component/DataSet checks observed 48 → 2 → 1 visible rows on two collapse actions and 1 → 2 → 48 rows on two expand actions.
 - Real pointer input across both sides of the same sibling boundary retained exactly one marker (`before` the next row) and produced the expected reorder operation.
 - PR #31's focused branch independently passed its 2 Node suites and Debug build (JSHint for 33 files).
@@ -92,4 +107,4 @@ The combined checks cover natural and directional page scrolling, the floating t
 
 ## Remaining live-environment check
 
-The previous packages were exercised in a real Azure DevOps organization and produced the production feedback above. The two fifth-pass commits have automated, Release-build, and local-browser coverage, but have not yet been reinstalled there. Before publication, another live smoke test should confirm that opening the Gantt tab performs no repeated iframe reload, that a collapsed hierarchy stays collapsed and keeps its page position after a valid reorder, valid same-parent and cross-parent writes for active and completed Work Items, local rejection and repair routes for invalid process hierarchies, successful recovery from a genuinely stale `TF400486` snapshot, daily zoom with the organization's real field columns, new-tab navigation in the Azure host, and the earlier scrolling, clipping, expansion, and persistence corrections.
+The previous packages were exercised in a real Azure DevOps organization and produced the production feedback above. The latest sixth-pass commits have automated and Release-build coverage, but have not yet been reinstalled there. Before publication, another live smoke test should confirm that **Jump to today** centers the current zoom, mixed ranked/unranked siblings match the native Backlogs order, the floating date axis remains immediately below both the sticky alert and filter while scrolling, and **Column Options** remains usable at the target display width. The earlier reload, collapsed-tree, reorder-write, scrolling, clipping, expansion, navigation, and persistence checks should also be repeated as a compact regression pass.
