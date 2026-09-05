@@ -53,12 +53,12 @@ const listeners = {};
 const chartListeners = {};
 const splitListeners = {};
 let hitElement = null;
-const filter = { getBoundingClientRect: function () { return { top: 0, bottom: 48 }; } };
+const stickyRegion = { getBoundingClientRect: function () { return { top: 0, bottom: 64 }; } };
 const document = {
     addEventListener: function (name, callback) { listeners[name] = callback; },
     removeEventListener: function (name, callback) { if (listeners[name] === callback) { delete listeners[name]; } },
     elementFromPoint: function () { return hitElement; },
-    querySelector: function (selector) { return selector === ".querygantt-tab__filter" ? filter : null; },
+    querySelector: function (selector) { return selector === ".querygantt-tab__sticky-region" ? stickyRegion : null; },
     head: { querySelectorAll: function () { return []; }, appendChild: function () {} },
     body: {
         appendChild: function (element) { element.parentNode = this; },
@@ -118,8 +118,11 @@ const chart = {
 };
 const scrollContainer = {
     scrollTop: 200,
-    addEventListener: function () {},
-    removeEventListener: function () {}
+    scrollListener: null,
+    addEventListener: function (name, callback) { if (name === "scroll") { this.scrollListener = callback; } },
+    removeEventListener: function (name, callback) {
+        if (name === "scroll" && this.scrollListener === callback) { this.scrollListener = null; }
+    }
 };
 const root = {
     classList: makeClassList(),
@@ -173,6 +176,7 @@ const viewModel = ko.registration.viewModel.createViewModel({
         listWidthChanged: function (value) { savedListWidth = value; }
     }, actions: {}
 }, { element: { firstChild: root, querySelector: function () {} } });
+assert.ok(scrollContainer.scrollListener, "the floating date axis should observe the page scroll container");
 
 const groupUpdates = [];
 viewModel.timeline = {};
@@ -315,11 +319,15 @@ assert.deepStrictEqual(JSON.parse(JSON.stringify(move)), { draggedId: 1, targetI
 assert.strictEqual(viewModel._backlogDraggedId, null);
 
 viewModel.timeline = {};
-viewModel._syncFloatingAxis(true);
-assert.ok(viewModel.floatingAxis.classList.contains("my-timeline__floating-axis--visible"), "the cloned top axis should float below the sticky filter");
-assert.strictEqual(viewModel.floatingAxis.style.top, "48px");
+viewModel.backlogOrder(false);
+scrollContainer.scrollListener();
+assert.ok(viewModel.floatingAxis.classList.contains("my-timeline__floating-axis--visible"), "the Query-order date axis should follow document scrolling");
+assert.strictEqual(viewModel.floatingAxis.style.top, "64px", "the floating date axis should stay below the complete alert/filter sticky region");
 assert.strictEqual(viewModel.floatingAxis.style.left, "420px");
 assert.ok(viewModel.floatingAxis.firstChild, "the live top date labels should be mirrored into the floating layer");
+viewModel.backlogOrder(true);
+scrollContainer.scrollListener();
+assert.ok(viewModel.floatingAxis.classList.contains("my-timeline__floating-axis--visible"), "the Backlog-order date axis should follow document scrolling");
 
 axisTop = 80;
 viewModel._syncFloatingAxis(false);
@@ -375,5 +383,9 @@ const timelineLess = fs.readFileSync(path.join(__dirname, "../less/components/ti
     .replace(/\r\n?/g, "\n");
 assert.ok(timelineLess.includes("&--drop-inside {\n            .my-timeline-group__title"), "a child drop should highlight the target title rather than draw another sibling line");
 assert.ok(timelineLess.includes("--status-success-background"), "the child destination should use a distinct light green success highlight");
+
+viewModel.timeline = null;
+viewModel.dispose();
+assert.strictEqual(scrollContainer.scrollListener, null, "disposing the timeline should remove its scroll listener");
 
 console.log("timeline interaction tests passed");
