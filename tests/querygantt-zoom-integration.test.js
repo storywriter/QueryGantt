@@ -362,6 +362,7 @@ assert.strictEqual(appModel.zoomPreset(), "300");
     assert.strictEqual(html.includes(">500%</option>"), false, "the zoom selector should stop at 400%");
     assert.ok(html.includes('title="Jump to today"') && html.includes("click: moveToday"), "the redundant zoom reset should be replaced by Jump to today");
     assert.strictEqual(html.includes("click: zoomReset"), false, "the toolbar should no longer expose a separate zoom reset action");
+    assert.ok(html.includes("ms-Icon--Repair") && html.includes(">Column Options</span>"), "column settings should match the native Backlogs wrench-and-label affordance");
     console.log("querygantt zoom integration tests passed");
 })().catch(function (error) {
     console.error(error);
