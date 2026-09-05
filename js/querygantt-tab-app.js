@@ -127,7 +127,7 @@ define([
         this._timeline_moveRightAction = ko.observable();
         this._timeline_zoomOutAction = ko.observable();
         this._timeline_zoomInAction = ko.observable();
-        this._timeline_zoomResetAction = ko.observable();
+        this._timeline_moveTodayAction = ko.observable();
         this._timeline_setZoomPresetAction = ko.observable();
         this._timeline_focusAction = ko.observable();
         this._timeline_closeAction = ko.observable();
@@ -815,11 +815,10 @@ define([
 
 
     /**
-     * Resets the timeline's zoom.
+     * Centers the current timeline window on today.
      */
-    Model.prototype.zoomReset = function () {
-        this.zoomPreset(timelineZoomService.percent100);
-        this.action("_timeline_zoomResetAction");
+    Model.prototype.moveToday = function () {
+        this.action("_timeline_moveTodayAction");
     };
 
 
