@@ -75,7 +75,7 @@ A sixth production pass on 2026-09-02 is addressed by `af655af`, `da7ed6a`, `275
 - Observe backlog order, date granularity, and zoom together when constructing or updating the timeline.
 - Treat Azure host query parameters as external navigation state: serialize updates, preserve unrelated parameters, and avoid writing an unchanged `showFields` value because even a no-op host write may reload the iframe.
 
-If the focused PRs are merged separately, the suggested feature order is #31, #33, #35, then #37. PR #39 is independent and can be merged separately. Integration-only adjustments should then be reviewed and adapted to the resulting upstream state. This branch should not be merged wholesale without that review, especially if `main` has moved beyond `v1.5.2`.
+If the focused PRs are merged separately, the suggested feature order is #31, #33, #35, #37, #42, #43, then #44. PR #39 is independent and can be merged separately. Integration-only adjustments should then be reviewed and adapted to the resulting upstream state. This branch should not be merged wholesale without that review, especially if `main` has moved beyond `v1.5.2`.
 
 ## Validation
 
