@@ -165,8 +165,14 @@ TimelineStub.prototype.setWindow = function (start, end) {
 };
 TimelineStub.prototype.fit = function () { this.window = this.fitWindow; };
 TimelineStub.prototype.moveTo = function (time, options) {
+    const duration = this.window.end.getTime() - this.window.start.getTime();
+    const center = new Date(time).getTime();
     this.moveToTime = new Date(time);
     this.moveToOptions = options;
+    this.window = {
+        start: new Date(center - duration / 2),
+        end: new Date(center + duration / 2)
+    };
 };
 TimelineStub.prototype.zoomIn = function () {};
 TimelineStub.prototype.zoomOut = function () {};
@@ -256,9 +262,16 @@ assert.strictEqual(changes[2].preset, "100");
 assert.deepStrictEqual(plain(zoomService.serializeView(changes[2])), { preset: "100" });
 
 const today = new Date("2026-09-02T12:00:00.000Z");
+const beforeTodayWindow = latestTimeline.getWindow();
+const beforeTodayDuration = beforeTodayWindow.end.getTime() - beforeTodayWindow.start.getTime();
 timelineViewModel.moveToday(today);
+const afterTodayWindow = latestTimeline.getWindow();
 assert.strictEqual(latestTimeline.moveToTime.toISOString(), today.toISOString(), "Jump to today should center the visible range on today");
 assert.deepStrictEqual(plain(latestTimeline.moveToOptions), { animation: false }, "Jump to today should move directly without altering the selected zoom preset");
+assert.strictEqual(afterTodayWindow.end.getTime() - afterTodayWindow.start.getTime(), beforeTodayDuration,
+    "Jump to today must retain the current zoom duration");
+assert.strictEqual((afterTodayWindow.start.getTime() + afterTodayWindow.end.getTime()) / 2, today.getTime(),
+    "Jump to today must place today at the center of the visible window");
 
 timelineViewModel.setZoomPreset("daily");
 const dailyDuration = latestTimeline.window.end - latestTimeline.window.start;
