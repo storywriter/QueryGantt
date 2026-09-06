@@ -24,11 +24,11 @@ The branch starts from `info-emait/QueryGantt@54f4cdb` (`v1.5.2`). The PR change
 | #31 | `b7fa674`, `31d0de5` | `247b4c6` | `7959d4e`, `f1758f0` |
 | #33 | `31389d5` | `f42c1ab` | `3b9ccfb` |
 | #35 | `04f9775` | `e5fbd91` | `0622e6e` |
-| #37 | `c15a451` | `6c619f6` | `1924028` |
+| #37 | `c15a451` | `858e830` | `1924028` |
 | #39 | `a1377d4` | `a1377d4` | `cc55b1c` |
 | #42 | `6730423` | `4cdee3e` | `aa95ab1` |
-| #43 | `2486d5f` | `2486d5f` | `57760f4` |
-| #44 | `1e80150` | `b36f6cd` | `3cc5d05` |
+| #43 | `2486d5f` | `e44beb1` | `57760f4` |
+| #44 | `1e80150` | `0309f58` | `3cc5d05` |
 
 The commit IDs differ because the changes were replayed onto one branch and integration conflicts were resolved there.
 
@@ -53,6 +53,8 @@ A fifth production pass on 2026-08-27 found two host-state regressions. Commit `
 
 A sixth production pass on 2026-09-02 is addressed by `af655af`, `da7ed6a`, `275d7c9`, and `690389a`. Mixed siblings with and without a process Order value now use one transitive ordering rule, and reorder anchors use that same visible order. The floating date axis measures the complete sticky alert/filter region, fixing the regression caused when the filter became a margin-offset child of that region. The redundant zoom-reset command is replaced by a direct **Jump to today** action that retains the current zoom, and the field configuration entry point now matches Azure Backlogs with a wrench icon and **Column Options** label. Focused equivalents are `247b4c6` on PR #31, `f42c1ab` on PR #33, `6c619f6` on PR #37, and `b36f6cd` on PR #44. PRs #35, #42, and #43 were reviewed and intentionally left unchanged because they do not own these behaviors; their combinations are covered by this branch's complete suite and builds.
 
+A retrospective regression-test audit on 2026-09-06 reviewed the focused test suite for every requested PR, not only the combined branch. Three assertions were strengthened where source-text checks did not fully exercise the behavior: `fa03cb5` verifies that **Jump to today** changes the visible window, preserves its duration, and centers it on today; `fb6320d` verifies the splitter commit callback through the application model and browser-storage round trip, including startup restoration; and `4f8a2d3` executes the actual row-template renderer to verify arbitrary-field order and HTML escaping. Focused equivalents are `858e830` on PR #37, `e44beb1` on PR #43, and `0309f58` on PR #44. PRs #31, #33, #35, and #42 already exercised their reported failure paths and required no test changes.
+
 ## Integration decisions
 
 - Let the Azure DevOps page scroll the naturally expanded Work Item rows. Only the top date axis is rendered; a read-only fixed mirror keeps it below the sticky filter after its original position scrolls away. PNG export renders the already expanded timeline without changing the user's scroll state.
@@ -76,6 +78,20 @@ A sixth production pass on 2026-09-02 is addressed by `af655af`, `da7ed6a`, `275
 - Treat Azure host query parameters as external navigation state: serialize updates, preserve unrelated parameters, and avoid writing an unchanged `showFields` value because even a no-op host write may reload the iframe.
 
 If the focused PRs are merged separately, the suggested feature order is #31, #33, #35, #37, #42, #43, then #44. PR #39 is independent and can be merged separately. Integration-only adjustments should then be reviewed and adapted to the resulting upstream state. This branch should not be merged wholesale without that review, especially if `main` has moved beyond `v1.5.2`.
+
+## Retrospective regression-test audit
+
+| Pull request | Failure path covered by the focused branch | Audit result |
+| --- | --- | --- |
+| #31 | Real timeline component scroll listener, floating-axis visibility and position below the full sticky region, resize/export/cleanup, and stacking order | Adequate as written; the combined interaction suite additionally repeats the scroll assertion in both Query and Backlog order modes. |
+| #33 | Mixed ranked/unranked siblings, rendered order and reorder-anchor agreement, hierarchy/Area Path validation, server failure and retry, pointer drop regions, and collapsed-tree/page-scroll preservation | Adequate as written. |
+| #35 | Local-midnight and inclusive-day calculations, DST/non-mutation behavior, component `zoomMin`, resize, persistence, and startup integration | Adequate as written; the date unit suite also passes in New York and Tokyo time zones. |
+| #37 | Preset/custom persistence and migration, daily zoom, startup integration, and **Jump to today** | Strengthened to assert the resulting centered window and unchanged duration rather than only the `moveTo` call arguments. |
+| #42 | Full title retained by JavaScript, single-line CSS clipping without an ellipsis, fixed metadata alignment, and preserved tree indentation | Adequate as written. |
+| #43 | Pointer and keyboard resizing, responsive bounds, coalesced redraw, export exclusion, disposal, and browser persistence | Strengthened to exercise the application-model write boundary, browser-storage round trip, and matching startup restore key. |
+| #44 | Field-definition discovery, supported formats, add/remove/reorder/swap configuration, query/runtime plumbing, and toolbar affordance | Strengthened to execute the actual row renderer and assert saved field order, escaped values, and absence of raw injected markup. |
+
+Every focused suite is part of that branch's `npm test` command, and all integration suites are part of the combined branch's `npm test`. The repository currently has no GitHub Actions or Azure Pipelines workflow, and the PRs therefore have no required status checks; these tests detect regressions when `npm test` is run locally or by a future CI job, but CI enforcement is a separate repository-policy change.
 
 ## Validation
 
