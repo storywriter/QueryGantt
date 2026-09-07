@@ -28,7 +28,7 @@ The branch starts from `info-emait/QueryGantt@54f4cdb` (`v1.5.2`). The PR change
 | #39 | `a1377d4` | `a1377d4` | `cc55b1c` |
 | #42 | `6730423` | `4cdee3e` | `aa95ab1` |
 | #43 | `2486d5f` | `e44beb1` | `57760f4` |
-| #44 | `1e80150` | `0309f58` | `3cc5d05` |
+| #44 | `1e80150` | `5b5d32e` | `3cc5d05` |
 
 The commit IDs differ because the changes were replayed onto one branch and integration conflicts were resolved there.
 
@@ -55,6 +55,8 @@ A sixth production pass on 2026-09-02 is addressed by `af655af`, `da7ed6a`, `275
 
 A retrospective regression-test audit on 2026-09-06 reviewed the focused test suite for every requested PR, not only the combined branch. Three assertions were strengthened where source-text checks did not fully exercise the behavior: `fa03cb5` verifies that **Jump to today** changes the visible window, preserves its duration, and centers it on today; `fb6320d` verifies the splitter commit callback through the application model and browser-storage round trip, including startup restoration; and `4f8a2d3` executes the actual row-template renderer to verify arbitrary-field order and HTML escaping. Focused equivalents are `858e830` on PR #37, `e44beb1` on PR #43, and `0309f58` on PR #44. PRs #31, #33, #35, and #42 already exercised their reported failure paths and required no test changes.
 
+A seventh production pass on 2026-09-07 found that the Column Options rows did not reorder inside the Azure DevOps configuration iframe. Commit `1c1cf67` replaces native HTML `dragstart`/`drop` handling with captured Pointer Events and document-level tracking, while retaining the existing keyboard reorder path. It also adds insertion-edge feedback and verifies the complete pointer lifecycle, persisted order, cancellation, and cleanup. The focused equivalent is `5b5d32e` on PR #44. PRs #31, #33, #35, #37, #42, and #43 were reviewed and intentionally left unchanged because they neither add nor render the configurable field-row drag surface.
+
 ## Integration decisions
 
 - Let the Azure DevOps page scroll the naturally expanded Work Item rows. Only the top date axis is rendered; a read-only fixed mirror keeps it below the sticky filter after its original position scrolls away. PNG export renders the already expanded timeline without changing the user's scroll state.
@@ -72,6 +74,7 @@ A retrospective regression-test audit on 2026-09-06 reviewed the focused test su
 - Define zoom presets as data-relative magnifications: `100%` fits all data, while `200%` through `400%` show progressively smaller windows. `1 day` derives a window from the drawable timeline width so each day receives a minor-axis label. Arbitrary wheel/pinch/button zoom is stored as `Custom`.
 - Use **Jump to today** to center the current visible window on the current date without changing its zoom. `100%` remains available from the preset selector, so there is no separate reset command.
 - Present configurable field settings as a wrench-labelled **Column Options** command, matching the corresponding Azure Backlogs affordance.
+- Reorder Column Options rows through captured Pointer Events rather than native HTML drag/drop. Track movement on the iframe document, show the target insertion edge, cancel without mutation, and release pointer capture and listeners on completion, cancellation, or disposal. Keep Space plus Up/Down as the keyboard path.
 - In `Day` granularity, set and resize a width-aware `zoomMin` so vis-timeline cannot switch to an hour/minute axis. `Hours and minutes` retains the original unrestricted behavior.
 - Open timeline work-item titles through native `target="_blank"` anchors with `noopener noreferrer`; stop propagation to vis-timeline without cancelling browser navigation.
 - Observe backlog order, date granularity, and zoom together when constructing or updating the timeline.
@@ -89,18 +92,21 @@ If the focused PRs are merged separately, the suggested feature order is #31, #3
 | #37 | Preset/custom persistence and migration, daily zoom, startup integration, and **Jump to today** | Strengthened to assert the resulting centered window and unchanged duration rather than only the `moveTo` call arguments. |
 | #42 | Full title retained by JavaScript, single-line CSS clipping without an ellipsis, fixed metadata alignment, and preserved tree indentation | Adequate as written. |
 | #43 | Pointer and keyboard resizing, responsive bounds, coalesced redraw, export exclusion, disposal, and browser persistence | Strengthened to exercise the application-model write boundary, browser-storage round trip, and matching startup restore key. |
-| #44 | Field-definition discovery, supported formats, add/remove/reorder/swap configuration, query/runtime plumbing, and toolbar affordance | Strengthened to execute the actual row renderer and assert saved field order, escaped values, and absence of raw injected markup. |
+| #44 | Field-definition discovery, supported formats, add/remove/reorder/swap configuration, real pointer lifecycle and cancellation, query/runtime plumbing, and toolbar affordance | Strengthened to execute the actual row renderer and to exercise pointer capture, document tracking, drop feedback, persisted order, cancellation, cleanup, and real template wiring. |
 
 Every focused suite is part of that branch's `npm test` command, and all integration suites are part of the combined branch's `npm test`. The repository currently has no GitHub Actions or Azure Pipelines workflow, and the PRs therefore have no required status checks; these tests detect regressions when `npm test` is run locally or by a future CI job, but CI enforcement is a separate repository-policy change.
 
 ## Validation
 
-Latest rerun on 2026-09-06:
+Latest rerun on 2026-09-07:
 
-- `npm test`: all 14 Node test suites passed, including mixed ranked/unranked Backlog siblings, display/reorder-anchor agreement, **Jump to today**, toolbar markup, and floating-axis scroll behavior in both Query and Backlog order modes.
+- `npm test`: all 14 Node test suites passed, including mixed ranked/unranked Backlog siblings, display/reorder-anchor agreement, **Jump to today**, Column Options pointer reorder/cancellation/cleanup, toolbar markup, and floating-axis scroll behavior in both Query and Backlog order modes.
 - `npx grunt app-build:Debug`: passed, including JSHint for 44 files.
-- `npx grunt app-build:Release`: passed, including JSHint for 44 files, CSS minification, and JavaScript minification.
-- PR #31 independently passed 3 Node suites and its Debug build (33 JSHint files); PR #33 passed 5 suites and Debug (34 files); PR #35 passed 5 suites and Debug (35 files); PR #37 passed 5 suites and Debug (35 files); PR #42 passed 1 suite and Debug (33 files); PR #43 passed 2 suites and Debug (35 files); and PR #44 passed 2 suites and Debug (34 files).
+- `npx grunt app-build:Release`: passed after the Debug build, including JSHint for 44 files, CSS minification, and JavaScript minification.
+- PR #44 independently passed its 2 focused suites and Debug build (34 JSHint files) on 2026-09-07.
+- The unchanged focused PRs retain their 2026-09-06 validations: PR #31 passed 3 Node suites and Debug (33 JSHint files); PR #33 passed 5 suites and Debug (34 files); PR #35 passed 5 suites and Debug (35 files); PR #37 passed 5 suites and Debug (35 files); PR #42 passed 1 suite and Debug (33 files); and PR #43 passed 2 suites and Debug (35 files).
+
+The Column Options pointer change was additionally exercised in local Chrome inside an iframe: a handle drag changed the observable row order without a runtime error. This confirms the browser input path locally; reinstalling the updated package in the target Azure DevOps organization remains the final host-level check.
 
 The following browser, time-zone, and input checks are retained from the 2026-08-27 integration validation:
 
@@ -123,4 +129,4 @@ The combined checks cover natural and directional page scrolling, the floating t
 
 ## Remaining live-environment check
 
-The previous packages were exercised in a real Azure DevOps organization and produced the production feedback above. The latest sixth-pass commits have automated and Release-build coverage, but have not yet been reinstalled there. Before publication, another live smoke test should confirm that **Jump to today** centers the current zoom, mixed ranked/unranked siblings match the native Backlogs order, the floating date axis remains immediately below both the sticky alert and filter while scrolling, and **Column Options** remains usable at the target display width. The earlier reload, collapsed-tree, reorder-write, scrolling, clipping, expansion, navigation, and persistence checks should also be repeated as a compact regression pass.
+The previous packages were exercised in a real Azure DevOps organization and produced the production feedback above. The latest seventh-pass commit has automated, local iframe-Chrome, and Release-build coverage, but has not yet been reinstalled there. Before publication, another live smoke test should confirm that Column Options rows reorder by pointer and persist after Save/reopen, **Jump to today** centers the current zoom, mixed ranked/unranked siblings match the native Backlogs order, the floating date axis remains immediately below both the sticky alert and filter while scrolling, and **Column Options** remains usable at the target display width. The earlier reload, collapsed-tree, reorder-write, scrolling, clipping, expansion, navigation, and persistence checks should also be repeated as a compact regression pass.
