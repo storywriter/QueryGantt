@@ -21,14 +21,14 @@ The branch starts from `info-emait/QueryGantt@54f4cdb` (`v1.5.2`). The PR change
 
 | Pull request | Initial source commit(s) | Current focused PR tip | Initial commit(s) on this branch |
 | --- | --- | --- | --- |
-| #31 | `b7fa674`, `31d0de5` | `247b4c6` | `7959d4e`, `f1758f0` |
-| #33 | `31389d5` | `f42c1ab` | `3b9ccfb` |
-| #35 | `04f9775` | `e5fbd91` | `0622e6e` |
-| #37 | `c15a451` | `858e830` | `1924028` |
-| #39 | `a1377d4` | `a1377d4` | `cc55b1c` |
-| #42 | `6730423` | `4cdee3e` | `aa95ab1` |
-| #43 | `2486d5f` | `e44beb1` | `57760f4` |
-| #44 | `1e80150` | `5b5d32e` | `3cc5d05` |
+| #31 | `b7fa674`, `31d0de5` | `e6f20d0` | `7959d4e`, `f1758f0` |
+| #33 | `31389d5` | `ee4206d` | `3b9ccfb` |
+| #35 | `04f9775` | `3430bd9` | `0622e6e` |
+| #37 | `c15a451` | `e7fc91d` | `1924028` |
+| #39 | `a1377d4` | `a305892` | `cc55b1c` |
+| #42 | `6730423` | `89f8f8f` | `aa95ab1` |
+| #43 | `2486d5f` | `95d0860` | `57760f4` |
+| #44 | `1e80150` | `862ac86` | `3cc5d05` |
 
 The commit IDs differ because the changes were replayed onto one branch and integration conflicts were resolved there.
 
@@ -57,17 +57,23 @@ A retrospective regression-test audit on 2026-09-06 reviewed the focused test su
 
 A seventh production pass on 2026-09-07 found that the Column Options rows did not reorder inside the Azure DevOps configuration iframe. Commit `1c1cf67` replaces native HTML `dragstart`/`drop` handling with captured Pointer Events and document-level tracking, while retaining the existing keyboard reorder path. It also adds insertion-edge feedback and verifies the complete pointer lifecycle, persisted order, cancellation, and cleanup. The focused equivalent is `5b5d32e` on PR #44. PRs #31, #33, #35, #37, #42, and #43 were reviewed and intentionally left unchanged because they neither add nor render the configurable field-row drag surface.
 
+An eighth production pass on 2026-10-13 reported periodically overlapping child rows and reorder errors that named a valid immediate parent instead of an invalid higher ancestor. Commit `0b328e0` removes flex stretching from the shared vis label: vis-timeline measures `.vis-inner` to calculate the label height, so stretching the inner element to that same previously assigned height creates feedback when a hidden tab is revealed or child bars are outside the date window. The browser regression fails before the fix and samples actual row/foreground geometry across multiple one-second autoResize polls after the fix. All eight focused PRs carry this shared CSS correction and the same browser suite; their unrelated Node suites are retained.
+
+Commit `8854075` adds read-only ancestor diagnostics after a hierarchy-related reorder rejection. It reads current work-item types and Parent links from Azure, including ancestors outside the query, identifies a known same-category/reversed Parent link or cycle, and gives the offending IDs/types, `Links > Parent` repair location, and child-to-parent path. The original server error remains visible. Successful moves and unrelated failures make no diagnostic requests; checks stop after six seconds or 32 work items, and inaccessible/unknown categories are not presented as confirmed causes. A late response cannot resurrect a dismissed error. This belongs only to focused PR #33 (`ee4206d`), since the other PRs do not implement backlog drag/reorder writes. The browser harness additionally loads the original string polyfill and reads both older/newer row ID attributes so every independently installable PR exercises its real component.
+
 ## Integration decisions
 
 - Let the Azure DevOps page scroll the naturally expanded Work Item rows. Only the top date axis is rendered; a read-only fixed mirror keeps it below the sticky filter after its original position scrolls away. PNG export renders the already expanded timeline without changing the user's scroll state.
 - Keep vertical wheel and dominant vertical background-drag input on the page scroll container. Native horizontal trackpad input, Shift + wheel, and dominant horizontal background drags pan the date range.
 - Use pointer-driven backlog drag handling so vis-timeline's gesture handling cannot swallow native drag events. Query items omitted from the Backlog API, including completed items, are associated with their process-specific Order field and remain eligible for reorder operations.
+- Keep the vis label's inner content at its intrinsic height (`align-items: flex-start`) so label measurement cannot feed back into its own calculated height. Do not disable the resize watcher or replace vis-timeline's height calculation.
 - Within one sibling group, place entries with a process Order value first in ascending order, then entries without that value in Backlog API order. Use the same total order for rendering and reorder-neighbor selection so a mix of ranked and unranked Work Items cannot produce cyclic comparisons.
 - Before a reorder write, require the proposed parent to be in the immediately higher backlog category (or root), and require the moved item, target, and neighboring reorder anchors to belong to the current team's configured Area Paths. An item with an invalid current parent can still be moved to root or a valid parent to repair the hierarchy.
 - Treat the lower half of one sibling row and the upper half of the next sibling row as one insertion boundary, rendered as one blue line. Expand and collapse buttons reveal or hide one visible hierarchy level per click, matching Azure Boards.
 - After Azure accepts a backlog move, update the cloned backlog index, query path, parent metadata, and child counts locally instead of calling `refresh()`. Invalid or rejected moves leave local state unchanged. Expand/collapse sends one DataSet batch rather than one redraw per Work Item.
 - For a successful move that keeps the same Work Item and dependency IDs, retain the live vis-timeline instance and update its ordered DataSets in place. Carry forward each group's `showNested` state, recompute descendant visibility from the new parent graph, and restore page scroll after the batch update.
 - If Azure returns stale-snapshot error `TF400486`, rebuild only the current team's backlog index and retry the exact operation once. Do not retry deterministic process-hierarchy violations, and preserve Azure's final error text when the retry still fails.
+- After a hierarchy rejection, trace the fresh Parent chain from the operation target/anchor named by Azure. Identify the actual incompatible ancestor link without editing it or blaming a valid immediate link. Keep the original rejection if a permission error, cycle, depth bound, or timeout prevents a complete lookup.
 - Render WIQL results before slow Backlog and icon requests finish. Mark the Backlog selector as loading during discovery and activate the persisted Backlog order as soon as its index arrives, without re-running the query.
 - Reconcile rendered item DOM with the current visible date window after initial draw and range changes so stale out-of-window bars cannot remain pinned at an edge.
 - Keep visible columns and backlog sort mode in Azure Extension Data as before. Keep timeline granularity and zoom in browser-local storage, scoped by extension, project, and (for zoom) query, so public/internal installations and different queries do not overwrite each other.
@@ -98,7 +104,28 @@ Every focused suite is part of that branch's `npm test` command, and all integra
 
 ## Validation
 
-Latest rerun on 2026-09-07:
+Latest rerun on 2026-10-13:
+
+- `npm test`: all 15 Node suites passed. The new ancestor diagnostic suite exercises a higher reversed link, same-category links, unknown/skipped categories, current server reads outside the query, named operation anchors, relation fallback, cycles, denied/missing ancestors, depth/timeout bounds, late/dismissed responses, unchanged local state, and the successful/no-diagnostic path.
+- `npm run test:browser`: passed on the combined branch in both Query and Backlog order. Actual pinned vis-timeline/Knockout plus source LESS and Azure UI core CSS are exercised in headless Chrome with synthetic data. The checks sample row/inner/foreground height and overlap through hidden/revealed startup, out-of-range children, scrolling, collapse/expand, and resizing; indentation and configured-column alignment are also checked.
+- `npx grunt app-build:Debug`, followed by `npx grunt app-build:Release`: passed (44 JSHint-clean files); the Release build includes CSS and JavaScript minification.
+- The same browser geometry checks also passed against the actual Release-built/minified component, services, and CSS, in both Query and Backlog order, with no runtime errors.
+- Every focused branch independently passed `npm test`, `npm run test:browser`, and its Debug build:
+
+| PR | Node suites | JSHint-clean files | Additional scope |
+| --- | --- | --- | --- |
+| #31 | 3 | 33 | Shared row-height stabilization and browser coverage |
+| #33 | 6 | 34 | Shared row-height stabilization plus ancestor diagnostics |
+| #35 | 5 | 35 | Shared row-height stabilization and browser coverage |
+| #37 | 5 | 35 | Shared row-height stabilization and browser coverage |
+| #39 | 1 | 33 | Shared row-height stabilization and browser coverage |
+| #42 | 1 | 33 | Shared row-height stabilization and browser coverage |
+| #43 | 2 | 35 | Shared row-height stabilization and browser coverage |
+| #44 | 2 | 34 | Shared row-height stabilization and browser coverage |
+
+The identical browser test file is shared across all eight PRs and the combined branch. Only branches that implement Backlog order run that mode; the remaining focused branches exercise their Query-order component. Google Chrome is the default browser prerequisite; `README.md` also describes Playwright-managed Chromium. These are local regression checks, not confirmation in the production Azure DevOps organization.
+
+Previous rerun on 2026-09-07:
 
 - `npm test`: all 14 Node test suites passed, including mixed ranked/unranked Backlog siblings, display/reorder-anchor agreement, **Jump to today**, Column Options pointer reorder/cancellation/cleanup, toolbar markup, and floating-axis scroll behavior in both Query and Backlog order modes.
 - `npx grunt app-build:Debug`: passed, including JSHint for 44 files.
@@ -129,4 +156,4 @@ The combined checks cover natural and directional page scrolling, the floating t
 
 ## Remaining live-environment check
 
-The previous packages were exercised in a real Azure DevOps organization and produced the production feedback above. The latest seventh-pass commit has automated, local iframe-Chrome, and Release-build coverage, but has not yet been reinstalled there. Before publication, another live smoke test should confirm that Column Options rows reorder by pointer and persist after Save/reopen, **Jump to today** centers the current zoom, mixed ranked/unranked siblings match the native Backlogs order, the floating date axis remains immediately below both the sticky alert and filter while scrolling, and **Column Options** remains usable at the target display width. The earlier reload, collapsed-tree, reorder-write, scrolling, clipping, expansion, navigation, and persistence checks should also be repeated as a compact regression pass.
+The previous packages were exercised in a real Azure DevOps organization and produced the production feedback above. The 2026-10-13 changes have automated Node, local Chrome, and Release-build coverage, but have not yet been reinstalled there. A live smoke test should confirm that child rows stay separated across several resize polls, tab reveal, scrolling, and hierarchy expansion, including rows with bars outside the date window. If an existing hierarchy violation rejects a move, confirm that the extra hint identifies the actual ancestor Parent link and preserves the Azure rejection without modifying any links. Repeat Column Options drag/Save/reopen, **Jump to today**, native Backlogs order, the floating date axis below the sticky alert/filter, and the earlier reload/collapsed-tree/navigation checks as a compact regression pass.

@@ -52,6 +52,7 @@ const mountTimeline = async function (page, styles, backlogOrder) {
             return window.services[name.replace("services/", "")];
         }));
     });
+    await page.addScriptTag({ path: path.join(root, "js/polyfills/string.truncate.js") });
     await page.addScriptTag({ path: path.join(root, "js/components/timeline.js") });
     await page.evaluate(backlogOrder => {
         const element = document.getElementById("component");
@@ -111,9 +112,10 @@ const readLayout = async function (page) {
                 const row = content.getBoundingClientRect();
                 const title = content.querySelector(".my-timeline-group__title").getBoundingClientRect();
                 const assigned = content.querySelector(".my-timeline-group__content--assignedto");
-                const group = window.view.timeline.itemSet.groups[content.dataset.workItemId];
+                const id = content.getAttribute("data-work-item-id") || content.querySelector(".my-timeline-group__title").getAttribute("data-id");
+                const group = window.view.timeline.itemSet.groups[id];
                 return {
-                    id: content.dataset.workItemId, top: bounds.top, bottom: bounds.bottom, height: bounds.height,
+                    id, top: bounds.top, bottom: bounds.bottom, height: bounds.height,
                     innerHeight: inner.height, rowHeight: row.height, titleLeft: title.left,
                     assignedLeft: assigned && assigned.getBoundingClientRect().left,
                     foregroundHeight: group.dom.foreground.getBoundingClientRect().height
@@ -150,12 +152,16 @@ const assertStable = async function (page, mode, expectedCount) {
     const styles = await renderStyles();
     const browser = await chromium.launch({ channel: process.env.QUERYGANTT_BROWSER_CHANNEL || "chrome", headless: true });
     try {
+        let supportsBacklog = false;
+        const modes = [];
         for (const backlogOrder of [false, true]) {
+            if (backlogOrder && !supportsBacklog) { break; }
             const page = await browser.newPage({ viewport: { width: 1600, height: 800 } });
             const errors = [];
             page.on("pageerror", error => errors.push(error.message));
             const mode = backlogOrder ? "Backlog order" : "Query order";
             await mountTimeline(page, styles, backlogOrder);
+            supportsBacklog = await page.evaluate(() => typeof window.view.backlogOrder === "function");
             await assertStable(page, `${mode}, revealed/out-of-range`, 80);
             await page.evaluate(() => { document.querySelector(".v-scroll-auto").scrollTop = 1200; });
             await assertStable(page, `${mode}, scrolled`, 80);
@@ -177,8 +183,9 @@ const assertStable = async function (page, mode, expectedCount) {
             }
             await page.evaluate(() => { window.view.dispose(); });
             await page.close();
+            modes.push(mode);
         }
-        console.log("timeline browser layout tests passed (Query and Backlog order, hidden/revealed, out-of-range, scroll, collapse/expand, resize)");
+        console.log(`timeline browser layout tests passed (${modes.join(" and ")}; hidden/revealed, out-of-range, scroll, collapse/expand, resize)`);
     }
     finally {
         await browser.close();
