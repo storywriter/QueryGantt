@@ -458,6 +458,59 @@ define([], () => {
         return result;
     };
 
+
+    /**
+     * Describes a freshly read child-to-parent chain after Azure rejects a
+     * move. Only known same-category/reversed links and cycles are diagnosed;
+     * a skipped or unknown category is not proof of the server's cause.
+     */
+    const describeParentChain = function (index, chain) {
+        if (!chain || !chain.length) {
+            return "";
+        }
+
+        const label = (item) => `#${item.id}${item.type ? " (" + item.type + ")" : ""}`;
+        const path = "Ancestor path (child -> parent): " + chain.map(label).join(" -> ") + ".";
+        const seen = new Set();
+        const repeated = chain.find((item) => {
+            if (seen.has(item.id)) {
+                return true;
+            }
+            seen.add(item.id);
+            return false;
+        });
+        let child;
+        let parent;
+        let reason;
+        if (repeated) {
+            parent = repeated;
+            child = chain[chain.length - 2];
+            reason = "this link closes a Parent cycle";
+        }
+        else {
+            for (let i = 0; i < chain.length - 1; i++) {
+                const childLevel = getLevelForType(index, chain[i].type);
+                const parentLevel = getLevelForType(index, chain[i + 1].type);
+                if (chain[i].parentId === chain[i + 1].id && childLevel && parentLevel && parentLevel.rank <= childLevel.rank) {
+                    child = chain[i];
+                    parent = chain[i + 1];
+                    reason = parentLevel.rank === childLevel.rank
+                        ? "both work items are in the same backlog category"
+                        : "the parent is in a lower backlog category than the child";
+                    break;
+                }
+            }
+        }
+
+        if (!child || !parent) {
+            return path;
+        }
+
+        return `Invalid ancestor Parent link: ${label(child)} -> ${label(parent)}; ${reason}. `
+            + `Open #${child.id}, check Links > Parent (#${parent.id}), and correct or remove that Parent link. `
+            + "Use Related instead if the association is not hierarchical. " + path;
+    };
+
     //#endregion
 
 
@@ -680,6 +733,7 @@ define([], () => {
         sortItems: sortItems,
         planMove: planMove,
         applyMove: applyMove,
+        describeParentChain: describeParentChain,
         isValidParent: isValidParent,
         isTeamOwned: isTeamOwned
     };

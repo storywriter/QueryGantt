@@ -553,12 +553,21 @@ define([
 
         this._backlogReorderInFlight = true;
         const client = api.getClient(workApi.WorkRestClient);
-        const fail = (failedPlan, error) => {
+        const fail = (failedPlan, error, items) => {
             const detail = this._getBacklogErrorMessage(error);
-            this.message(`Unable to reorder work item #${failedPlan.operation.ids[0]}.${detail ? " " + detail : ""}`);
+            const message = `Unable to reorder work item #${failedPlan.operation.ids[0]}.${detail ? " " + detail : ""}`;
+            this.message(message);
             console.warn(`App : reorderWit() : Unable to reorder work item #${failedPlan.operation.ids[0]}.`);
             console.warn(error);
-            return false;
+            if (!this._isBacklogHierarchyError(error)) {
+                return false;
+            }
+            return this._getBacklogHierarchyHint(failedPlan, items, detail).then((hint) => {
+                if (this.message() === message) {
+                    this.message(message + (hint ? " " + hint : ""));
+                }
+                return false;
+            });
         };
         const execute = (currentPlan, items, canRetry) => Promise.resolve()
             .then(() => client.reorderBacklogWorkItems(currentPlan.operation, this._getTeamContext()))
@@ -576,7 +585,7 @@ define([
             })
             .catch((error) => {
                 if (!canRetry || !this._isRetryableBacklogError(error)) {
-                    return fail(currentPlan, error);
+                    return fail(currentPlan, error, items);
                 }
 
                 // TF400486 commonly means the local sibling anchors became
@@ -586,7 +595,7 @@ define([
                 const previousIndex = this.backlogIndex();
                 return this._loadBacklogOrder(null, true).then((freshIndex) => {
                     if (freshIndex === previousIndex || !Object.keys((freshIndex || {}).levels || {}).length) {
-                        return fail(currentPlan, error);
+                        return fail(currentPlan, error, items);
                     }
                     this._activateBacklogIndex(freshIndex);
                     const freshItems = findItems();
@@ -605,8 +614,10 @@ define([
                 return result;
             },
             (error) => {
-                this._backlogReorderInFlight = false;
-                return fail(plan, error);
+                return Promise.resolve(fail(plan, error, initialItems)).then((result) => {
+                    this._backlogReorderInFlight = false;
+                    return result;
+                });
             }
         );
     };
@@ -1122,11 +1133,101 @@ define([
 
 
     /**
+     * Reads current Parent links only after a hierarchy rejection. Ancestors
+     * outside the query and links left behind by type changes must be checked
+     * against the server, not inferred from the rendered tree/backlog index.
+     */
+    Model.prototype._getBacklogHierarchyHint = function (plan, items, detail) {
+        const operation = plan.operation;
+        const target = items && items.target;
+        const candidates = [target && (target.originalId || target.id), operation.parentId, operation.previousId, operation.nextId]
+            .map(Number).filter((id) => Number.isInteger(id) && id > 0 && id !== operation.ids[0]);
+        const referenced = ((detail || "").match(/work item\s+#?\d+/gi) || [])
+            .map((reference) => Number(reference.match(/\d+/)[0]))
+            .find((id) => candidates.includes(id));
+        let id = referenced || candidates[0];
+        if (!Number.isInteger(id) || id <= 0) {
+            return Promise.resolve("");
+        }
+
+        const chain = [];
+        const seen = new Map();
+        let expired = false;
+        let timer;
+        const incomplete = "Ancestor check could not be completed. Check the drop target's Links > Parent and continue through its ancestors.";
+        const describe = () => backlogOrderService.describeParentChain(this.backlogIndex(), chain);
+        const timeout = new Promise((resolve) => {
+            timer = global.setTimeout(() => {
+                expired = true;
+                resolve([describe(), incomplete].filter(Boolean).join(" "));
+            }, 6000);
+        });
+        const read = Promise.resolve().then(() => {
+            const client = api.getClient(witApi.WorkItemTrackingRestClient);
+            const visit = () => {
+                if (expired) {
+                    return "";
+                }
+                if (!id) {
+                    return describe();
+                }
+                if (seen.has(id)) {
+                    chain.push(seen.get(id));
+                    return describe();
+                }
+                if (chain.length >= 32) {
+                    return [describe(), incomplete].filter(Boolean).join(" ");
+                }
+
+                return client.getWorkItems([id], this.project.id, ["System.Id", "System.WorkItemType", "System.Parent"], null, "relations")
+                    .then((results) => {
+                        if (expired) {
+                            return "";
+                        }
+                        const item = (results || []).find((result) => Number(result.id) === id);
+                        if (!item) {
+                            throw new Error("Ancestor was not returned.");
+                        }
+                        const fields = item.fields || {};
+                        const relation = (item.relations || []).find((link) => link.rel === "System.LinkTypes.Hierarchy-Reverse");
+                        const parent = fields["System.Parent"] !== undefined
+                            ? fields["System.Parent"]
+                            : relation ? (relation.url || "").split("/").pop() : 0;
+                        const parentId = Number(parent || 0);
+                        if (!Number.isInteger(parentId) || parentId < 0) {
+                            throw new Error("Ancestor Parent could not be read.");
+                        }
+                        const node = { id: id, type: fields["System.WorkItemType"], parentId: parentId };
+                        chain.push(node);
+                        seen.set(id, node);
+                        id = parentId;
+                        return visit();
+                    });
+            };
+            return visit();
+        }).catch(() => [describe(), incomplete].filter(Boolean).join(" "));
+
+        return Promise.race([read, timeout]).then((hint) => {
+            global.clearTimeout(timer);
+            return hint;
+        });
+    };
+
+
+    Model.prototype._isBacklogHierarchyError = function (error) {
+        return /same category|same backlog category|parent.*category|hierarch|parent cycle/i.test(this._getBacklogErrorMessage(error));
+    };
+
+
+    /**
      * Returns whether Azure reported a stale backlog snapshot. These failures
      * can succeed after rebuilding parent and sibling anchors; hierarchy and
      * category validation errors are deterministic and must remain visible.
      */
     Model.prototype._isRetryableBacklogError = function (error) {
+        if (this._isBacklogHierarchyError(error)) {
+            return false;
+        }
         const message = this._getBacklogErrorMessage(error).toLowerCase();
         return message.indexOf("tf400486") >= 0
             || message.indexOf("another user has modified") >= 0
