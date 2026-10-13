@@ -344,6 +344,10 @@
 
         &-label {
             display: flex;
+            // vis-timeline measures .vis-inner to calculate this label's
+            // height. Stretching it to the previously calculated height
+            // creates feedback, especially for hidden/out-of-range children.
+            align-items: flex-start;
 
             &.vis-group-level-1,
             &.vis-group-level-2,
