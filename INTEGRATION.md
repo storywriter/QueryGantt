@@ -21,14 +21,14 @@ The branch starts from `info-emait/QueryGantt@54f4cdb` (`v1.5.2`). The PR change
 
 | Pull request | Initial source commit(s) | Current focused PR tip | Initial commit(s) on this branch |
 | --- | --- | --- | --- |
-| #31 | `b7fa674`, `31d0de5` | `e6f20d0` | `7959d4e`, `f1758f0` |
-| #33 | `31389d5` | `ee4206d` | `3b9ccfb` |
-| #35 | `04f9775` | `3430bd9` | `0622e6e` |
-| #37 | `c15a451` | `e7fc91d` | `1924028` |
-| #39 | `a1377d4` | `a305892` | `cc55b1c` |
-| #42 | `6730423` | `89f8f8f` | `aa95ab1` |
-| #43 | `2486d5f` | `95d0860` | `57760f4` |
-| #44 | `1e80150` | `862ac86` | `3cc5d05` |
+| #31 | `b7fa674`, `31d0de5` | `44cf4aa` | `7959d4e`, `f1758f0` |
+| #33 | `31389d5` | `31b5d68` | `3b9ccfb` |
+| #35 | `04f9775` | `0517902` | `0622e6e` |
+| #37 | `c15a451` | `9871f33` | `1924028` |
+| #39 | `a1377d4` | `e576d61` | `cc55b1c` |
+| #42 | `6730423` | `5e02f0b` | `aa95ab1` |
+| #43 | `2486d5f` | `37f8a58` | `57760f4` |
+| #44 | `1e80150` | `d4e564a` | `3cc5d05` |
 
 The commit IDs differ because the changes were replayed onto one branch and integration conflicts were resolved there.
 
@@ -104,7 +104,15 @@ Every focused suite is part of that branch's `npm test` command, and all integra
 
 ## Validation
 
-Latest rerun on 2026-10-13:
+### 2026-11-07
+
+Commit `0a4579c` starts the SDK handshake from the lightweight loading screen. The tab shows a dismissible notice when startup takes five seconds. XLSX and PNG load their libraries on demand, and display preparation indexes work-item paths, child counts, and timeline groups. All eight focused PRs carry these shared changes.
+
+- All nine branches passed `npm test`, `npm run test:browser`, and `npx grunt app-build:Debug`. The combined branch also passed the Release build and the Node suite with CRLF application source.
+- A Chrome test of the Release iframe against a simulated host verified the SDK handshake, dismissal during loading, a 465-row chart, and loading the XLSX module on the first export.
+- With synthetic tree queries and mock API responses, median model preparation fell from 19.0 ms to 10.7 ms for 465 rows and from 98.4 ms to 33.5 ms for 1,500 rows. These timings cover data preparation.
+
+### 2026-10-13
 
 - `npm test`: all 15 Node suites passed. The new ancestor diagnostic suite exercises a higher reversed link, same-category links, unknown/skipped categories, current server reads outside the query, named operation anchors, relation fallback, cycles, denied/missing ancestors, depth/timeout bounds, late/dismissed responses, unchanged local state, and the successful/no-diagnostic path.
 - `npm run test:browser`: passed on the combined branch in both Query and Backlog order. Actual pinned vis-timeline/Knockout plus source LESS and Azure UI core CSS are exercised in headless Chrome with synthetic data. The checks sample row/inner/foreground height and overlap through hidden/revealed startup, out-of-range children, scrolling, collapse/expand, and resizing; indentation and configured-column alignment are also checked.
