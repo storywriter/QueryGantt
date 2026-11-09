@@ -22,7 +22,7 @@ The branch starts from `info-emait/QueryGantt@54f4cdb` (`v1.5.2`). The PR change
 | Pull request | Initial source commit(s) | Current focused PR tip | Initial commit(s) on this branch |
 | --- | --- | --- | --- |
 | #31 | `b7fa674`, `31d0de5` | `2d8cb56` | `7959d4e`, `f1758f0` |
-| #33 | `31389d5` | `aea467a` | `3b9ccfb` |
+| #33 | `31389d5` | `9ac5e60` | `3b9ccfb` |
 | #35 | `04f9775` | `212688e` | `0622e6e` |
 | #37 | `c15a451` | `36a97b9` | `1924028` |
 | #39 | `a1377d4` | `497ffb7` | `cc55b1c` |
@@ -113,6 +113,7 @@ All eight focused PRs also add switches for work item controls/detail panes and 
 - All nine branches passed their complete `npm test`, Chrome browser regression suite, and Debug build. The combined branch also passed the Release build.
 - Node coverage exercises the ordinary settings startup/Save/reopen path, older preferences, both switches, cancelled settings, and a delayed detail-panel request after controls are disabled.
 - Diagnostic coverage exercises explicit initiation, both move endpoints, shared ancestors, relation-only responses, invalid links, cycles, cross-project uncertainty, denied/missing items, request/time limits, duplicate clicks, dismissed/late responses, and unchanged item/order state.
+- Follow-up `b2b4119` resets an in-flight analysis when an identical rejection recurs and clears the earlier report after a successful retry. Focused PR #33 carries `9ac5e60`, with both cases covered by the model regression suite.
 - Browser coverage exercises the real configuration switches, actual footer markup, analysis action/busy/results/dismissal, title navigation, control visibility while collapsed, and the existing timeline geometry checks in each supported order mode. The application/configuration source also passed the Node suite with CRLF input.
 
 ### 2026-11-07
