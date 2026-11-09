@@ -575,6 +575,9 @@ define([
             .then(() => {
                 try {
                     this._applyBacklogMove(currentPlan, items.dragged, items.target);
+                    if (this._backlogAnalysisContext) {
+                        this.message("");
+                    }
                     return true;
                 }
                 catch (error) {
@@ -1160,6 +1163,9 @@ define([
      * Keeps the failed move's endpoints available for a user-requested analysis.
      */
     Model.prototype._showBacklogFailure = function (message, plan, items) {
+        this._backlogAnalysisContext = null;
+        this.messageActionBusy(false);
+        this.messageAnalysis(null);
         this.message(message);
         const operation = plan.operation || {};
         const ids = [
