@@ -21,14 +21,14 @@ The branch starts from `info-emait/QueryGantt@54f4cdb` (`v1.5.2`). The PR change
 
 | Pull request | Initial source commit(s) | Current focused PR tip | Initial commit(s) on this branch |
 | --- | --- | --- | --- |
-| #31 | `b7fa674`, `31d0de5` | `44cf4aa` | `7959d4e`, `f1758f0` |
-| #33 | `31389d5` | `31b5d68` | `3b9ccfb` |
-| #35 | `04f9775` | `0517902` | `0622e6e` |
-| #37 | `c15a451` | `9871f33` | `1924028` |
-| #39 | `a1377d4` | `e576d61` | `cc55b1c` |
-| #42 | `6730423` | `5e02f0b` | `aa95ab1` |
-| #43 | `2486d5f` | `37f8a58` | `57760f4` |
-| #44 | `1e80150` | `d4e564a` | `3cc5d05` |
+| #31 | `b7fa674`, `31d0de5` | `2d8cb56` | `7959d4e`, `f1758f0` |
+| #33 | `31389d5` | `aea467a` | `3b9ccfb` |
+| #35 | `04f9775` | `212688e` | `0622e6e` |
+| #37 | `c15a451` | `36a97b9` | `1924028` |
+| #39 | `a1377d4` | `497ffb7` | `cc55b1c` |
+| #42 | `6730423` | `d27fd88` | `aa95ab1` |
+| #43 | `2486d5f` | `bf87a94` | `57760f4` |
+| #44 | `1e80150` | `9353727` | `3cc5d05` |
 
 The commit IDs differ because the changes were replayed onto one branch and integration conflicts were resolved there.
 
@@ -104,6 +104,17 @@ Every focused suite is part of that branch's `npm test` command, and all integra
 
 ## Validation
 
+### 2026-11-09
+
+Commit `da7a7c8` adds **Analyze Parent links** inside a rejected reorder alert. Analysis starts on request and reads current Parent relations from the dragged item, drop target, and operation anchors, including ancestors outside the query. It shares ancestor requests across paths, reports confirmed category violations and cycles with direct Work Item links, and explains incomplete reads. Analysis makes read requests, with a limit of 128 items and 15 seconds. Dismissing or replacing the alert discards late results. This functionality belongs to focused PR #33.
+
+All eight focused PRs also add switches for work item controls/detail panes and footer summaries. Both default to off and persist with the existing per-user/project column preferences. Saves merge the latest stored settings, and changing visibility alone preserves unchanged column observables and the live timeline. The edit path rechecks visibility after an asynchronous panel-service lookup.
+
+- All nine branches passed their complete `npm test`, Chrome browser regression suite, and Debug build. The combined branch also passed the Release build.
+- Node coverage exercises the ordinary settings startup/Save/reopen path, older preferences, both switches, cancelled settings, and a delayed detail-panel request after controls are disabled.
+- Diagnostic coverage exercises explicit initiation, both move endpoints, shared ancestors, relation-only responses, invalid links, cycles, cross-project uncertainty, denied/missing items, request/time limits, duplicate clicks, dismissed/late responses, and unchanged item/order state.
+- Browser coverage exercises the real configuration switches, actual footer markup, analysis action/busy/results/dismissal, title navigation, control visibility while collapsed, and the existing timeline geometry checks in each supported order mode. The application/configuration source also passed the Node suite with CRLF input.
+
 ### 2026-11-07
 
 Commit `0a4579c` starts the SDK handshake from the lightweight loading screen. The tab shows a dismissible notice when startup takes five seconds. XLSX and PNG load their libraries on demand, and display preparation indexes work-item paths, child counts, and timeline groups. All eight focused PRs carry these shared changes.
@@ -164,4 +175,4 @@ The combined checks cover natural and directional page scrolling, the floating t
 
 ## Remaining live-environment check
 
-The previous packages were exercised in a real Azure DevOps organization and produced the production feedback above. The 2026-10-13 changes have automated Node, local Chrome, and Release-build coverage, but have not yet been reinstalled there. A live smoke test should confirm that child rows stay separated across several resize polls, tab reveal, scrolling, and hierarchy expansion, including rows with bars outside the date window. If an existing hierarchy violation rejects a move, confirm that the extra hint identifies the actual ancestor Parent link and preserves the Azure rejection without modifying any links. Repeat Column Options drag/Save/reopen, **Jump to today**, native Backlogs order, the floating date axis below the sticky alert/filter, and the earlier reload/collapsed-tree/navigation checks as a compact regression pass.
+The 2026-11-09 changes have local Node, Chrome, and Release-build coverage. In the target Azure DevOps organization, confirm that **Analyze Parent links** identifies a known invalid ancestor, that its links open the expected Work Items, and that incomplete reads identify the affected items. Confirm default-hidden controls and summaries, both switches through Save/reopen, and a collapsed tree retained after a visibility-only save. Repeat Column Options drag/Save/reopen, **Jump to today**, native Backlogs order, floating-axis scrolling below the alert/filter, and the existing row-height/reload/navigation checks.

@@ -332,6 +332,7 @@ const assertStable = async function (page, mode, expectedCount) {
             page.on("pageerror", error => errors.push(error.message));
             const mode = backlogOrder ? "Backlog order" : "Query order";
             await mountTimeline(page, styles, backlogOrder);
+            const titleTarget = await page.locator(".my-timeline-group__title").first().getAttribute("target");
             await page.evaluate(() => { window.initialTimeline = window.view.timeline; });
             const edit = page.locator(".my-timeline-group__button--edit").first();
             assert.strictEqual(await edit.isVisible(), false, "controls must be hidden by default");
@@ -343,7 +344,7 @@ const assertStable = async function (page, mode, expectedCount) {
             await page.evaluate(() => window.view.showItemActions(false));
             assert.strictEqual(await edit.isVisible(), false);
             assert.strictEqual(await page.evaluate(() => window.initialTimeline === window.view.timeline), true, "toggling controls must preserve the timeline instance");
-            assert.strictEqual(await page.locator(".my-timeline-group__title").first().getAttribute("target"), "_blank");
+            assert.strictEqual(await page.locator(".my-timeline-group__title").first().getAttribute("target"), titleTarget, "toggling controls must preserve title navigation");
             supportsBacklog = await page.evaluate(() => typeof window.view.backlogOrder === "function");
             await assertStable(page, `${mode}, revealed/out-of-range`, 80);
             await page.evaluate(() => { document.querySelector(".v-scroll-auto").scrollTop = 1200; });
