@@ -399,6 +399,7 @@ const appLoader = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     "api/Work/index": {},
     "services/data": { getManager: function () { return Promise.resolve(startupSettingsManager); } },
     "services/backlog-order": backlogOrderService, "services/hierarchy-analysis": {},
+    "services/hierarchy-localization": require("./helpers/load-pure-service")("hierarchy-localization"),
     "services/browser-settings": browserSettingsService,
     "services/date-granularity": dateGranularityService,
     "services/field-columns": fieldColumnsService,

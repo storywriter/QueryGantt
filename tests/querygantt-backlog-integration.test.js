@@ -95,6 +95,7 @@ const app = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     "api/index": api,
     "api/Work/index": workApi,
     "services/backlog-order": backlogOrderService, "services/hierarchy-analysis": {},
+    "services/hierarchy-localization": require("./helpers/load-pure-service")("hierarchy-localization"),
     "services/browser-settings": browserSettingsService,
     "services/date-granularity": dateGranularityService,
     "services/field-columns": fieldColumnsService,

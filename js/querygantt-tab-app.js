@@ -11,6 +11,7 @@ define([
     "services/data",
     "services/backlog-order",
     "services/hierarchy-analysis",
+    "services/hierarchy-localization",
     "services/browser-settings",
     "services/date-granularity",
     "services/field-columns",
@@ -22,7 +23,7 @@ define([
     "my/components/message",
     "my/components/filter",
     "my/components/zerodata"
-], function (module, require, polyfills, ko, bindings, sdk, api, witApi, workApi, dataService, backlogOrderService, hierarchyAnalysisService, browserSettingsService, dateGranularityService, fieldColumnsService, timelineZoomService, timelineSplitService, iconService) {
+], function (module, require, polyfills, ko, bindings, sdk, api, witApi, workApi, dataService, backlogOrderService, hierarchyAnalysisService, hierarchyLocalization, browserSettingsService, dateGranularityService, fieldColumnsService, timelineZoomService, timelineSplitService, iconService) {
     //#region [ Fields ]
 
     const global = (function () { return this; })();
@@ -44,6 +45,7 @@ define([
 
         this.version = args.version;
         this.user = args.user;
+        this.analysisCulture = hierarchyLocalization.normalize(args.culture);
         this.project = args.project;
         this.team = args.team;
         this.query = args.query;
@@ -564,7 +566,7 @@ define([
         const client = api.getClient(workApi.WorkRestClient);
         const fail = (failedPlan, error, items) => {
             const detail = this._getBacklogErrorMessage(error);
-            const message = `Unable to reorder work item #${failedPlan.operation.ids[0]}.${detail ? " " + detail : ""}`;
+            const message = hierarchyLocalization.text(this.analysisCulture, "reorderFailed", { id: failedPlan.operation.ids[0] }) + (detail ? " " + detail : "");
             this._showBacklogFailure(message, failedPlan, items);
             console.warn(`App : reorderWit() : Unable to reorder work item #${failedPlan.operation.ids[0]}.`);
             console.warn(error);
@@ -1172,7 +1174,7 @@ define([
             items.dragged && (items.dragged.originalId || items.dragged.id),
             items.target && (items.target.originalId || items.target.id),
             ...(operation.ids || []), operation.parentId, operation.previousId, operation.nextId,
-            ...((message || "").match(/work item\s+#?\d+/gi) || []).map((value) => value.match(/\d+/)[0])
+            ...((message || "").match(/(?:work item|作業項目|作業アイテム)\s*#?\d+/gi) || []).map((value) => value.match(/\d+/)[0])
         ].map(Number).filter((id) => Number.isInteger(id) && id > 0);
         this._backlogAnalysisContext = { ids: [...new Set(ids)].slice(0, 20) };
         this.messageAction(ids.length ? this.analyzeBacklogFailure.bind(this) : null);
@@ -1192,6 +1194,7 @@ define([
             client: api.getClient(witApi.WorkItemTrackingRestClient),
             projectName: this.project.name,
             index: this.backlogIndex(),
+            culture: this.analysisCulture,
             isCancelled: () => this._backlogAnalysisContext !== context
         })).then((result) => {
             if (this._backlogAnalysisContext !== context) {
@@ -1208,7 +1211,7 @@ define([
         }, () => {
             if (this._backlogAnalysisContext === context) {
                 this.messageAnalysis({
-                    summary: "The analysis could not finish. Try again or check read permissions.",
+                    summary: hierarchyLocalization.text(this.analysisCulture, "failed"),
                     findings: [], traces: [], warnings: []
                 });
                 this.messageActionBusy(false);
@@ -1878,6 +1881,7 @@ define([
                     priorities: cnf.priorities,
                     fields: cnf.fields,
                     user: sdk.getUser().displayName,
+                    culture: hierarchyLocalization.getLanguage(sdk),
                     project: project,
                     team,
                     query,

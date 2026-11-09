@@ -22,6 +22,7 @@
                     <my-message params="text: message,
                                         action: messageAction,
                                         busy: messageActionBusy,
+                                        culture: analysisCulture,
                                         analysis: messageAnalysis"></my-message>
                     <div class="querygantt-tab__filter flex-row margin-top-16" style="display: none" data-bind="visible: (wits().length || zero() !== null) && !isLoading()">
                         <my-filter params="value: filter,

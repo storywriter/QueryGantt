@@ -110,6 +110,11 @@ Commit `da7a7c8` adds **Analyze Parent links** inside a rejected reorder alert. 
 
 All eight focused PRs also add switches for work item controls/detail panes and footer summaries. Both default to off and persist with the existing per-user/project column preferences. Saves merge the latest stored settings, and changing visibility alone preserves unchanged column observables and the live timeline. The edit path rechecks visibility after an asynchronous panel-service lookup.
 
+The analysis UI additionally supports Japanese and English using `SDK.getPageContext().globalization.culture` after `SDK.ready()`. The host culture takes precedence over browser language; unsupported or unavailable cultures fall back to English. Buttons, summaries, findings, warnings, Parent-chain labels, and item-link labels are localized. IDs, process-specific type names, and original server error details are preserved. This follow-up applies to the combined branch and PR #33, which are the branches containing Parent-link analysis.
+
+- Both affected branches passed `npm test`, `npm run test:browser`, and their Debug builds; the combined branch also passed Release.
+- Localization coverage includes language normalization/fallback, ordinary startup and reopen, reversed/same-category/cyclic links, no findings, partial results, read failures, unknown/cross-project categories, item/time limits, and failed analysis. Chrome mounts the actual component with the actual application template in both languages, with an opposite browser locale, and checks busy state, findings, links, expanded paths, dismissal, text escaping, and horizontal overflow.
+
 - All nine branches passed their complete `npm test`, Chrome browser regression suite, and Debug build. The combined branch also passed the Release build.
 - Node coverage exercises the ordinary settings startup/Save/reopen path, older preferences, both switches, cancelled settings, and a delayed detail-panel request after controls are disabled.
 - Diagnostic coverage exercises explicit initiation, both move endpoints, shared ancestors, relation-only responses, invalid links, cycles, cross-project uncertainty, denied/missing items, request/time limits, duplicate clicks, dismissed/late responses, and unchanged item/order state.
@@ -143,7 +148,7 @@ Commit `0a4579c` starts the SDK handshake from the lightweight loading screen. T
 | #43 | 2 | 35 | Shared row-height stabilization and browser coverage |
 | #44 | 2 | 34 | Shared row-height stabilization and browser coverage |
 
-The identical browser test file is shared across all eight PRs and the combined branch. Only branches that implement Backlog order run that mode; the remaining focused branches exercise their Query-order component. Google Chrome is the default browser prerequisite; `README.md` also describes Playwright-managed Chromium. These are local regression checks, not confirmation in the production Azure DevOps organization.
+The browser geometry checks are shared across all eight PRs and the combined branch. Only branches that implement Backlog order run that mode; the remaining focused branches exercise their Query-order component. Analysis-localization coverage runs on the combined branch and PR #33. Google Chrome is the default browser prerequisite; `README.md` also describes Playwright-managed Chromium. These are local regression checks, not confirmation in the production Azure DevOps organization.
 
 Previous rerun on 2026-09-07:
 
@@ -176,4 +181,4 @@ The combined checks cover natural and directional page scrolling, the floating t
 
 ## Remaining live-environment check
 
-The 2026-11-09 changes have local Node, Chrome, and Release-build coverage. In the target Azure DevOps organization, confirm that **Analyze Parent links** identifies a known invalid ancestor, that its links open the expected Work Items, and that incomplete reads identify the affected items. Confirm default-hidden controls and summaries, both switches through Save/reopen, and a collapsed tree retained after a visibility-only save. Repeat Column Options drag/Save/reopen, **Jump to today**, native Backlogs order, floating-axis scrolling below the alert/filter, and the existing row-height/reload/navigation checks.
+The 2026-11-09 changes have local Node, Chrome, and Release-build coverage. In the target Azure DevOps organization, confirm that **Analyze Parent links** identifies a known invalid ancestor, that its links open the expected Work Items, and that incomplete reads identify the affected items. Verify Japanese/English analysis with the Azure DevOps language setting, including reopen after changing language. Confirm default-hidden controls and summaries, both switches through Save/reopen, and a collapsed tree retained after a visibility-only save. Repeat Column Options drag/Save/reopen, **Jump to today**, native Backlogs order, floating-axis scrolling below the alert/filter, and the existing row-height/reload/navigation checks.
