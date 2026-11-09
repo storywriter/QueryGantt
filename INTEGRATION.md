@@ -22,7 +22,7 @@ The branch starts from `info-emait/QueryGantt@54f4cdb` (`v1.5.2`). The PR change
 | Pull request | Initial source commit(s) | Current focused PR tip | Initial commit(s) on this branch |
 | --- | --- | --- | --- |
 | #31 | `b7fa674`, `31d0de5` | `2d8cb56` | `7959d4e`, `f1758f0` |
-| #33 | `31389d5` | `9ac5e60` | `3b9ccfb` |
+| #33 | `31389d5` | `3be267c` | `3b9ccfb` |
 | #35 | `04f9775` | `212688e` | `0622e6e` |
 | #37 | `c15a451` | `36a97b9` | `1924028` |
 | #39 | `a1377d4` | `497ffb7` | `cc55b1c` |
@@ -110,9 +110,10 @@ Commit `da7a7c8` adds **Analyze Parent links** inside a rejected reorder alert. 
 
 All eight focused PRs also add switches for work item controls/detail panes and footer summaries. Both default to off and persist with the existing per-user/project column preferences. Saves merge the latest stored settings, and changing visibility alone preserves unchanged column observables and the live timeline. The edit path rechecks visibility after an asynchronous panel-service lookup.
 
-The analysis UI additionally supports Japanese and English using `SDK.getPageContext().globalization.culture` after `SDK.ready()`. The host culture takes precedence over browser language; unsupported or unavailable cultures fall back to English. Buttons, summaries, findings, warnings, Parent-chain labels, and item-link labels are localized. IDs, process-specific type names, and original server error details are preserved. This follow-up applies to the combined branch and PR #33, which are the branches containing Parent-link analysis.
+Commit `3955d90` additionally supports Japanese and English in the analysis UI using `SDK.getPageContext().globalization.culture` after `SDK.ready()`. The host culture takes precedence over browser language; unsupported or unavailable cultures fall back to English. Buttons, summaries, findings, warnings, Parent-chain labels, and item-link labels are localized. IDs, process-specific type names, and original server error details are preserved. This follow-up applies to the combined branch and PR #33 (`3be267c`), which are the branches containing Parent-link analysis.
 
 - Both affected branches passed `npm test`, `npm run test:browser`, and their Debug builds; the combined branch also passed Release.
+- Both affected branches passed their Node suites with CRLF application/service source. The combined Release-generated/minified message component and analysis/localization services also passed the Japanese/English browser checks and visual inspection.
 - Localization coverage includes language normalization/fallback, ordinary startup and reopen, reversed/same-category/cyclic links, no findings, partial results, read failures, unknown/cross-project categories, item/time limits, and failed analysis. Chrome mounts the actual component with the actual application template in both languages, with an opposite browser locale, and checks busy state, findings, links, expanded paths, dismissal, text escaping, and horizontal overflow.
 
 - All nine branches passed their complete `npm test`, Chrome browser regression suite, and Debug build. The combined branch also passed the Release build.
