@@ -247,6 +247,7 @@ vm.runInNewContext(exposedAppSource, {
             "services/browser-settings": browserSettingsService,
             "services/date-granularity": dateGranularityService,
             "services/field-columns": fieldColumnsService,
+            "services/hierarchy-analysis": {},
             "services/timeline-split": service,
             "services/timeline-zoom": timelineZoomService
         };

@@ -94,7 +94,7 @@ const app = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     sdk: {},
     "api/index": api,
     "api/Work/index": workApi,
-    "services/backlog-order": backlogOrderService,
+    "services/backlog-order": backlogOrderService, "services/hierarchy-analysis": {},
     "services/browser-settings": browserSettingsService,
     "services/date-granularity": dateGranularityService,
     "services/field-columns": fieldColumnsService,
@@ -140,6 +140,9 @@ const makeModel = function () {
     model.isHistorical = observable(false);
     model.orderMode = observable(backlogOrderService.queryOrder);
     model.message = observable("");
+    model.messageAction = observable(null);
+    model.messageActionBusy = observable(false);
+    model.messageAnalysis = observable(null);
     model.isLoading = observable(false);
     model.wits = observable([]);
     model._settingsSavePromise = Promise.resolve();
@@ -387,6 +390,8 @@ const makeModel = function () {
     configurationModel.extensionId = "publisher.internal";
     configurationModel.browserStorage = {};
     configurationModel.fieldsValue = observable(["dates", "duration"]);
+    configurationModel.showItemActions = observable(false);
+    configurationModel.showFooter = observable(false);
     configurationModel.dateGranularity = observable("time");
     configurationModel.panel = { close: function (result) { panelResult = result; } };
     await configurationModel.save();
@@ -395,12 +400,16 @@ const makeModel = function () {
         value: {
             orderMode: "backlog",
             zoomViews: { "query-a": { preset: "week" } },
-            showFields: ["dates", "duration"]
+            showFields: ["dates", "duration"],
+            showItemActions: false,
+            showFooter: false
         },
         options: { scopeType: "User" }
     }, "saving configuration should preserve backlog order and query zoom views");
     assert.deepStrictEqual(JSON.parse(JSON.stringify(panelResult)), {
         fieldsValue: ["dates", "duration"],
+        showItemActions: false,
+        showFooter: false,
         dateGranularity: "time"
     });
     assert.deepStrictEqual(browserWrites.pop(), {

@@ -34,6 +34,8 @@ define([
         const definitions = ko.isObservable(args.fields) ? args.fields() : args.fields;
         this.fields = ko.observableArray(fieldColumnsService.mergeDefinitions(definitions || [], [], selected));
         this.fieldsValue = ko.observableArray(selected);
+        this.showItemActions = ko.observable(args.showItemActions === true);
+        this.showFooter = ko.observable(args.showFooter === true);
         this._nextFieldRowId = 1;
         this._draggedFieldRow = null;
         this._fieldPointerId = null;
@@ -220,6 +222,8 @@ define([
      */
     Model.prototype.save = function() {
         const fieldsValue = this._getFieldsValue();
+        const showItemActions = this.showItemActions() === true;
+        const showFooter = this.showFooter() === true;
         const dateGranularity = dateGranularityService.normalize(this.dateGranularity());
         const key = `gantt_${this.project.id}`;
         browserSettingsService.write(
@@ -244,10 +248,12 @@ define([
                 }
 
                 settings.showFields = fieldsValue;
+                settings.showItemActions = showItemActions;
+                settings.showFooter = showFooter;
 
                 return manager.setValue(key, JSON.stringify(settings), { scopeType: "User" });
             })
-            .then(() => this.panel.close({ fieldsValue, dateGranularity }));
+            .then(() => this.panel.close({ fieldsValue, dateGranularity, showItemActions, showFooter }));
     };
 
 
@@ -491,6 +497,8 @@ define([
                     project: project,
                     fields: config.fields,
                     fieldsValue: config.fieldsValue,
+                    showItemActions: config.showItemActions,
+                    showFooter: config.showFooter,
                     dateGranularity: config.dateGranularity,
                     extensionId: config.extensionId || sdk.getExtensionContext().id,
                     panel: config.panel

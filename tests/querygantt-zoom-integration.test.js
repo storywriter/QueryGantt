@@ -289,7 +289,7 @@ const appModule = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     module: { config: function () { return { priorities: [], fields: [] }; } },
     knockout: knockout,
     sdk: {},
-    "services/backlog-order": backlogOrderService,
+    "services/backlog-order": backlogOrderService, "services/hierarchy-analysis": {},
     "services/browser-settings": browserSettingsService,
     "services/date-granularity": dateGranularityService,
     "services/field-columns": fieldColumnsService,
@@ -353,7 +353,7 @@ assert.strictEqual(appModel.zoomPreset(), "300");
         module: { config: function () { return { priorities: [], fields: [] }; } }, knockout: startupKnockout, sdk: startupSdk,
         "api/index": { CommonServiceIds: commonServiceIds }, "api/WorkItemTracking/index": {}, "api/Work/index": {},
         "services/data": { getManager: function () { return Promise.resolve(manager); } },
-        "services/backlog-order": backlogOrderService, "services/browser-settings": browserSettingsService,
+        "services/backlog-order": backlogOrderService, "services/hierarchy-analysis": {}, "services/browser-settings": browserSettingsService,
         "services/date-granularity": dateGranularityService, "services/field-columns": fieldColumnsService, "services/timeline-split": timelineSplitService,
         "services/timeline-zoom": zoomService
     }, true);

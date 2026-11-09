@@ -398,7 +398,7 @@ const appLoader = loadAmd(path.join(__dirname, "../js/querygantt-tab-app.js"), {
     "api/WorkItemTracking/index": workItemTrackingApi,
     "api/Work/index": {},
     "services/data": { getManager: function () { return Promise.resolve(startupSettingsManager); } },
-    "services/backlog-order": backlogOrderService,
+    "services/backlog-order": backlogOrderService, "services/hierarchy-analysis": {},
     "services/browser-settings": browserSettingsService,
     "services/date-granularity": dateGranularityService,
     "services/field-columns": fieldColumnsService,
@@ -414,13 +414,17 @@ appLoader.result.Model.prototype.init = function () { return Promise.resolve(); 
         value: {
             orderMode: "backlog",
             customSetting: true,
-            showFields: ["dates", "duration"]
+            showFields: ["dates", "duration"],
+            showItemActions: false,
+            showFooter: false
         },
         options: { scopeType: "User" }
     }, "configuration saves should merge instead of overwriting other settings");
     assert.strictEqual(browserSettingsService.read("publisher.extension", "project-id", "dateGranularity", null, browserStorage), "day");
     assert.deepStrictEqual(JSON.parse(JSON.stringify(panelResult)), {
         fieldsValue: ["dates", "duration"],
+        showItemActions: false,
+        showFooter: false,
         dateGranularity: "day"
     });
 
