@@ -1,4 +1,4 @@
-# Integration notes for PRs #31, #33, #35, #37, #39, #42, #43, and #44
+# Integration notes for PRs #31, #33, #35, #37, #39, #42, #43, #44, and #45
 
 This branch combines the following pull requests so their interactions can be reviewed and tested in one place:
 
@@ -10,6 +10,7 @@ This branch combines the following pull requests so their interactions can be re
 - [#42: Clip overflowing work item titles at the column boundary](https://github.com/info-emait/QueryGantt/pull/42)
 - [#43: Add a persistent resizable timeline split](https://github.com/info-emait/QueryGantt/pull/43)
 - [#44: Add configurable work item field columns](https://github.com/info-emait/QueryGantt/pull/44)
+- [#45: Add on-demand Parent-link diagnostics with Japanese and English results](https://github.com/info-emait/QueryGantt/pull/45)
 
 Branch: [storywriter/QueryGantt:internal/integrated-querygantt](https://github.com/storywriter/QueryGantt/tree/internal/integrated-querygantt)
 
@@ -22,13 +23,14 @@ The branch starts from `info-emait/QueryGantt@54f4cdb` (`v1.5.2`). The PR change
 | Pull request | Initial source commit(s) | Current focused PR tip | Initial commit(s) on this branch |
 | --- | --- | --- | --- |
 | #31 | `b7fa674`, `31d0de5` | `2d8cb56` | `7959d4e`, `f1758f0` |
-| #33 | `31389d5` | `3be267c` | `3b9ccfb` |
+| #33 | `31389d5` | `4fe9e45` | `3b9ccfb` |
 | #35 | `04f9775` | `212688e` | `0622e6e` |
 | #37 | `c15a451` | `36a97b9` | `1924028` |
 | #39 | `a1377d4` | `497ffb7` | `cc55b1c` |
 | #42 | `6730423` | `d27fd88` | `aa95ab1` |
 | #43 | `2486d5f` | `bf87a94` | `57760f4` |
 | #44 | `1e80150` | `9353727` | `3cc5d05` |
+| #45 | `26f03bb` | `26f03bb` | `6fe1678` (developed here, then isolated) |
 
 The commit IDs differ because the changes were replayed onto one branch and integration conflicts were resolved there.
 
@@ -59,7 +61,7 @@ A seventh production pass on 2026-09-07 found that the Column Options rows did n
 
 An eighth production pass on 2026-10-13 reported periodically overlapping child rows and reorder errors that named a valid immediate parent instead of an invalid higher ancestor. Commit `0b328e0` removes flex stretching from the shared vis label: vis-timeline measures `.vis-inner` to calculate the label height, so stretching the inner element to that same previously assigned height creates feedback when a hidden tab is revealed or child bars are outside the date window. The browser regression fails before the fix and samples actual row/foreground geometry across multiple one-second autoResize polls after the fix. All eight focused PRs carry this shared CSS correction and the same browser suite; their unrelated Node suites are retained.
 
-Commit `8854075` adds read-only ancestor diagnostics after a hierarchy-related reorder rejection. It reads current work-item types and Parent links from Azure, including ancestors outside the query, identifies a known same-category/reversed Parent link or cycle, and gives the offending IDs/types, `Links > Parent` repair location, and child-to-parent path. The original server error remains visible. Successful moves and unrelated failures make no diagnostic requests; checks stop after six seconds or 32 work items, and inaccessible/unknown categories are not presented as confirmed causes. A late response cannot resurrect a dismissed error. This belongs only to focused PR #33 (`ee4206d`), since the other PRs do not implement backlog drag/reorder writes. The browser harness additionally loads the original string polyfill and reads both older/newer row ID attributes so every independently installable PR exercises its real component.
+Commit `8854075` adds read-only ancestor diagnostics after a hierarchy-related reorder rejection. It reads current work-item types and Parent links from Azure, including ancestors outside the query, identifies a known same-category/reversed Parent link or cycle, and gives the offending IDs/types, `Links > Parent` repair location, and child-to-parent path. The original server error remains visible. Successful moves and unrelated failures make no diagnostic requests; checks stop after six seconds or 32 work items, and inaccessible/unknown categories are not presented as confirmed causes. A late response cannot resurrect a dismissed error. At that time this belonged only to focused PR #33 (`ee4206d`); it was extracted to #45 on 2026-11-10. The original scope was #33 since the other PRs do not implement backlog drag/reorder writes. The browser harness additionally loads the original string polyfill and reads both older/newer row ID attributes so every independently installable PR exercises its real component.
 
 ## Integration decisions
 
@@ -73,7 +75,8 @@ Commit `8854075` adds read-only ancestor diagnostics after a hierarchy-related r
 - After Azure accepts a backlog move, update the cloned backlog index, query path, parent metadata, and child counts locally instead of calling `refresh()`. Invalid or rejected moves leave local state unchanged. Expand/collapse sends one DataSet batch rather than one redraw per Work Item.
 - For a successful move that keeps the same Work Item and dependency IDs, retain the live vis-timeline instance and update its ordered DataSets in place. Carry forward each group's `showNested` state, recompute descendant visibility from the new parent graph, and restore page scroll after the batch update.
 - If Azure returns stale-snapshot error `TF400486`, rebuild only the current team's backlog index and retry the exact operation once. Do not retry deterministic process-hierarchy violations, and preserve Azure's final error text when the retry still fails.
-- After a hierarchy rejection, trace the fresh Parent chain from the operation target/anchor named by Azure. Identify the actual incompatible ancestor link without editing it or blaming a valid immediate link. Keep the original rejection if a permission error, cycle, depth bound, or timeout prevents a complete lookup.
+- Keep local display order separate from persisted process Order values. After an accepted move, preserve all other entries' relative order across projected and synthetic parent groups; update cached process ranks only from Azure's returned reorder results.
+- Offer Parent-link analysis only on an explicit action in the error card. Read the named IDs and structured failed-move endpoints, including ancestors outside the query. Keep this read-only feature and its English/Japanese messages in #45, independently of #33's reorder model. Report HTTP status/original errors and uncertainty rather than treating an unreadable chain as valid.
 - Render WIQL results before slow Backlog and icon requests finish. Mark the Backlog selector as loading during discovery and activate the persisted Backlog order as soon as its index arrives, without re-running the query.
 - Reconcile rendered item DOM with the current visible date window after initial draw and range changes so stale out-of-window bars cannot remain pinned at an edge.
 - Keep visible columns and backlog sort mode in Azure Extension Data as before. Keep timeline granularity and zoom in browser-local storage, scoped by extension, project, and (for zoom) query, so public/internal installations and different queries do not overwrite each other.
@@ -86,7 +89,7 @@ Commit `8854075` adds read-only ancestor diagnostics after a hierarchy-related r
 - Observe backlog order, date granularity, and zoom together when constructing or updating the timeline.
 - Treat Azure host query parameters as external navigation state: serialize updates, preserve unrelated parameters, and avoid writing an unchanged `showFields` value because even a no-op host write may reload the iframe.
 
-If the focused PRs are merged separately, the suggested feature order is #31, #33, #35, #37, #42, #43, then #44. PR #39 is independent and can be merged separately. Integration-only adjustments should then be reviewed and adapted to the resulting upstream state. This branch should not be merged wholesale without that review, especially if `main` has moved beyond `v1.5.2`.
+If the focused PRs are merged separately, the suggested feature order is #31, #33, #35, #37, #42, #43, then #44. PR #39 is independent and can be merged separately. #45 is independent of the backlog-order service and can be merged before or after #33; its action becomes useful with reorder failures. Both PRs add test commands, so their `package.json` conflict must retain both sets of suites. This integration already registers and runs both. Integration-only adjustments should then be reviewed and adapted to the resulting upstream state. This branch should not be merged wholesale without that review, especially if `main` has moved beyond `v1.5.2`.
 
 ## Retrospective regression-test audit
 
@@ -99,10 +102,21 @@ If the focused PRs are merged separately, the suggested feature order is #31, #3
 | #42 | Full title retained by JavaScript, single-line CSS clipping without an ellipsis, fixed metadata alignment, and preserved tree indentation | Adequate as written. |
 | #43 | Pointer and keyboard resizing, responsive bounds, coalesced redraw, export exclusion, disposal, and browser persistence | Strengthened to exercise the application-model write boundary, browser-storage round trip, and matching startup restore key. |
 | #44 | Field-definition discovery, supported formats, add/remove/reorder/swap configuration, real pointer lifecycle and cancellation, query/runtime plumbing, and toolbar affordance | Strengthened to execute the actual row renderer and to exercise pointer capture, document tracking, drop feedback, persisted order, cancellation, cleanup, and real template wiring. |
+| #45 | Pinned SDK URL serialization, current ancestor reads, fresh category discovery, both locales, structured endpoints, partial/failed reads, cycles, limits, cancellation, and real error-card UI | Isolated feature coverage; source and minified UI both pass in Chrome. |
 
 Every focused suite is part of that branch's `npm test` command, and all integration suites are part of the combined branch's `npm test`. The repository currently has no GitHub Actions or Azure Pipelines workflow, and the PRs therefore have no required status checks; these tests detect regressions when `npm test` is run locally or by a future CI job, but CI enforcement is a separate repository-policy change.
 
 ## Validation
+
+### 2026-11-10
+
+- `e7e6afa` fixes unintended reordering after a drag. A regression with omitted completed rows and different Backlog API parent projections failed before the correction. The local display order now spans the complete backlog level, independently of process ranks. The model consumes all ranks returned by Azure and preserves them across metadata redecoration/reload. Focused #33 carries `81a2f51`.
+- `6fe1678` changes diagnostic reads to current `all` expansion without a field selector, using the same REST enum name as ordinary query loading. The pinned SDK's real URL serializer is exercised with a synthetic contract that rejected the earlier projection. HTTP failures now retain status and original details, and empty checked-path sections are hidden. The supplied screenshots do not contain the actual HTTP response status/body, so the precise production rejection remains unconfirmed until host verification.
+- Diagnostics now belong to the message component, with their own fresh team-category lookup. The reorder model provides generic structured endpoint IDs so analysis can inspect a drop target omitted from Azure's text. Diagnostics remain read-only, bounded, localized, and cancellable. Both source and minified modules pass the real English/Japanese component checks.
+- Focused #33 removes the prior diagnostic feature in the additional commit `4fe9e45`, including its legacy helper, UI, localization, docs, and feature-specific suites. The independent feature is #45 (`26f03bb`), based directly on upstream `main`; its modules and tests match this branch. No published history was rewritten. Older entries below describe the previous PR scopes.
+- All focused PRs (#31, #33, #35, #37, #39, #42, #43, #44, #45) and this integration passed their complete `npm test` and Debug builds. The unchanged seven feature branches were checked out and tested separately; they contain neither the reorder service nor diagnostics, so no unrelated code was added to them.
+- Chrome regression passed on the changed #33, #45, and integration branches. #33 and integration retain their real vis-timeline geometry checks in both supported order modes; #45 tests its standalone diagnostic component. Source and Release-minified diagnostic modules passed; integration and #45 passed sequential Debug and Release builds. Diagnostic/localization tests also passed with CRLF application modules and CRLF error-message input.
+- A virtual merge of #33 and #45 found only the expected `package.json` test-command conflict. The feature modules merge without conflicts; the integration retains both sets of suites. At final review, all nine upstream PRs were individually clean/mergeable against `main`. No CI or production changes were introduced.
 
 ### 2026-11-09
 
@@ -149,7 +163,7 @@ Commit `0a4579c` starts the SDK handshake from the lightweight loading screen. T
 | #43 | 2 | 35 | Shared row-height stabilization and browser coverage |
 | #44 | 2 | 34 | Shared row-height stabilization and browser coverage |
 
-The browser geometry checks are shared across all eight PRs and the combined branch. Only branches that implement Backlog order run that mode; the remaining focused branches exercise their Query-order component. Analysis-localization coverage runs on the combined branch and PR #33. Google Chrome is the default browser prerequisite; `README.md` also describes Playwright-managed Chromium. These are local regression checks, not confirmation in the production Azure DevOps organization.
+The browser geometry checks are shared across all eight PRs and the combined branch. Only branches that implement Backlog order run that mode; the remaining focused branches exercise their Query-order component. Since 2026-11-10, analysis-localization coverage runs on the combined branch and the independent PR #45; older checks above refer to #33 before extraction. Google Chrome is the default browser prerequisite; `README.md` also describes Playwright-managed Chromium. These are local regression checks, not confirmation in the production Azure DevOps organization.
 
 Previous rerun on 2026-09-07:
 
@@ -182,4 +196,17 @@ The combined checks cover natural and directional page scrolling, the floating t
 
 ## Remaining live-environment check
 
-The 2026-11-09 changes have local Node, Chrome, and Release-build coverage. In the target Azure DevOps organization, confirm that **Analyze Parent links** identifies a known invalid ancestor, that its links open the expected Work Items, and that incomplete reads identify the affected items. Verify Japanese/English analysis with the Azure DevOps language setting, including reopen after changing language. Confirm default-hidden controls and summaries, both switches through Save/reopen, and a collapsed tree retained after a visibility-only save. Repeat Column Options drag/Save/reopen, **Jump to today**, native Backlogs order, floating-axis scrolling below the alert/filter, and the existing row-height/reload/navigation checks.
+The 2026-11-10 changes have local Node, Chrome, and Debug/Release coverage.
+In the target Azure DevOps organization, drag one row above/below another while
+completed rows are visible: all other rows must retain their relative order,
+including after metadata refresh. Then create a known invalid ancestor and
+confirm **Analyze Parent links** reaches that link, opens the expected Work
+Items, and shows HTTP status/original details if a read fails. The actual
+production HTTP rejection was not captured in the supplied screenshots.
+
+Repeat Japanese/English analysis after changing the Azure DevOps language and
+reopening the tab. Retain the existing smoke checks for default-hidden controls
+and summaries, Save/reopen, collapsed-tree preservation, Column Options drag,
+Jump to today, native Backlogs order, floating-axis scroll, row height, reload,
+and title navigation. Local synthetic checks do not confirm authenticated host
+behavior or a production VSIX installation.
