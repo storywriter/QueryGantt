@@ -27,7 +27,8 @@ define([], function () {
             crossProject: "An ancestor belongs to another project. Its backlog categories need to be checked in that project.",
             unknownCategory: "Some work item types have no known backlog category. Their Parent links need to be checked in the project's process settings.",
             timeLimit: "The analysis reached its time limit. The chains shown may be incomplete. You can run the analysis again.",
-            reorderFailed: "Unable to reorder work item #{id}."
+            categoryFailed: "Backlog categories could not be loaded. Category checks are incomplete; Parent chains are still read.",
+            missingProject: "The current project could not be identified."
         },
         ja: {
             analyze: "親子関係を解析",
@@ -56,7 +57,8 @@ define([], function () {
             crossProject: "別のプロジェクトに属する祖先があります。そのプロジェクトのバックログ階層設定を確認してください。",
             unknownCategory: "バックログ階層が不明な Work Item の種類があります。プロジェクトのプロセス設定で親子関係を確認してください。",
             timeLimit: "解析の制限時間に達しました。表示された親階層は途中までの可能性があります。もう一度解析できます。",
-            reorderFailed: "Work Item #{id} の並べ替えができませんでした。"
+            categoryFailed: "バックログ階層を取得できませんでした。階層の判定は一部未完了ですが、親リンクの取得は続行します。",
+            missingProject: "現在のプロジェクトを特定できませんでした。"
         }
     };
 

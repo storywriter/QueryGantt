@@ -1,4 +1,48 @@
-define(["services/backlog-order", "services/hierarchy-localization"], function (backlogOrder, localization) {
+define(["services/hierarchy-localization"], function (localization) {
+    // This module is independent of backlog reordering and can be reviewed
+    // and installed as a separate, read-only diagnostic feature.
+    const createIndex = (backlogs) => ({ levels: Object.fromEntries((backlogs || []).map((level) => [level.id, {
+        rank: level.rank, workItemTypes: (level.workItemTypes || []).map((type) => type.name || type)
+    }])) });
+    const findParentIssue = function (index, chain) {
+        const levels = Object.values((index || {}).levels || {});
+        const levelFor = (type) => levels.find((level) => level.workItemTypes.includes(type));
+        const seen = new Set();
+        for (let i = 0; i < chain.length; i++) {
+            const parent = chain[i];
+            if (seen.has(parent.id)) {
+                return { child: chain[i - 1], parent, reasonCode: "parentCycle" };
+            }
+            seen.add(parent.id);
+        }
+        for (let i = 0; i < chain.length - 1; i++) {
+            const child = chain[i], parent = chain[i + 1];
+            const childLevel = levelFor(child.type), parentLevel = levelFor(parent.type);
+            if (child.parentId === parent.id && childLevel && parentLevel && parentLevel.rank <= childLevel.rank) {
+                return { child, parent, reasonCode: parentLevel.rank === childLevel.rank ? "sameCategory" : "reversedParent" };
+            }
+        }
+        return null;
+    };
+    const errorDetail = function (culture, error) {
+        const status = Number(error && (error.status || error.statusCode));
+        const detail = error && ((error.serverError || {}).message || error.message);
+        return [Number.isFinite(status) && status > 0 ? "HTTP " + status + "." : "",
+            typeof(detail) === "string" && detail ? localization.text(culture, "lookupDetail", { detail }) : ""].filter(Boolean).join(" ");
+    };
+    const getSeeds = function (message, contextIds = []) {
+        if (!message || (!contextIds.length && !/(?:reorder|backlog|parent|category|並[べび]替|親|階層)/i.test(message || ""))) {
+            return [];
+        }
+        const matches = (message || "").match(/(?:work item\s*#?|作業項目\s*#?|作業アイテム\s*#?|#)\s*\d+/gi) || [];
+        return [...new Set(contextIds.concat(matches.map((value) => value.match(/\d+/)[0])).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))].slice(0, 20);
+    };
+    const itemUrl = function (item) {
+        const link = item && item._links && item._links.html && item._links.html.href;
+        if (typeof(link) === "string" && /^https?:\/\//i.test(link)) return link;
+        return item && typeof(item.url) === "string" && /^https?:\/\//i.test(item.url)
+            ? item.url.replace(/\/_apis\/wit\/workitems\/\d+\/?$/i, "/_workitems/edit/" + item.id) : "";
+    };
     const analyze = function (args) {
         const text = (key, values) => localization.text(args.culture, key, values);
         const failure = (code) => {
@@ -20,7 +64,7 @@ define(["services/backlog-order", "services/hierarchy-localization"], function (
                     return Promise.reject(failure("itemLimit"));
                 }
                 const request = Promise.resolve().then(() => args.client.getWorkItems(
-                    [id], undefined, ["System.Id", "System.WorkItemType", "System.TeamProject"], null, 1
+                    [id], undefined, undefined, undefined, "all"
                 )).then((items) => {
                     const item = (items || []).find((candidate) => Number(candidate.id) === id);
                     if (!item) {
@@ -32,7 +76,7 @@ define(["services/backlog-order", "services/hierarchy-localization"], function (
                     if (!Number.isInteger(parentId) || parentId < 0 || parents.length > 1) {
                         throw failure("ambiguousParent");
                     }
-                    return { id, type: fields["System.WorkItemType"] || "", project: fields["System.TeamProject"] || "", parentId };
+                    return { id, type: fields["System.WorkItemType"] || "", project: fields["System.TeamProject"] || "", parentId, url: itemUrl(item) };
                 });
                 cache.set(id, request);
             }
@@ -61,8 +105,8 @@ define(["services/backlog-order", "services/hierarchy-localization"], function (
                         ? text("accessDenied")
                         : status === 404 ? text("notFound")
                         : text("lookupFailed", { reason: text(detail) });
-                    if (!status && !code && error && typeof(error.message) === "string" && error.message) {
-                        reason += " " + text("lookupDetail", { detail: error.message });
+                    if (!code) {
+                        reason += " " + errorDetail(args.culture, error);
                     }
                     warnings.add(text("warning", { id, reason }));
                 }
@@ -84,19 +128,20 @@ define(["services/backlog-order", "services/hierarchy-localization"], function (
                 for (let i = 0; i < trace.items.length - 1; i++) {
                     const pair = trace.items.slice(i, i + 2);
                     if (pair.every(sameProject)) {
-                        const issue = backlogOrder.findParentIssue(args.index, pair);
+                        const issue = findParentIssue(args.index, pair);
                         if (issue) {
                             issues.push(issue);
                         }
                     }
                 }
-                const cycle = backlogOrder.findParentIssue(backlogOrder.empty(), trace.items);
+                const cycle = findParentIssue({}, trace.items);
                 if (cycle) {
                     issues.push(cycle);
                 }
                 issues.forEach((issue) => {
                     findings.set(issue.child.id + "/" + issue.parent.id, {
                         child: issue.child.id, parent: issue.parent.id,
+                        childUrl: issue.child.url, parentUrl: issue.parent.url,
                         text: text("finding", {
                             child: label(issue.child), parent: label(issue.parent),
                             childId: issue.child.id, parentId: issue.parent.id, reason: text(issue.reasonCode)
@@ -111,7 +156,7 @@ define(["services/backlog-order", "services/hierarchy-localization"], function (
                 findings: [...findings.values()],
                 traces: traces.filter((trace) => trace.items.length).map((trace) => ({
                     text: text("chainFrom", { id: trace.id }),
-                    items: trace.items.map((node) => ({ id: node.id, text: label(node) }))
+                    items: trace.items.map((node) => ({ id: node.id, text: label(node), url: node.url }))
                 })),
                 warnings: [...warnings]
             };
@@ -130,5 +175,5 @@ define(["services/backlog-order", "services/hierarchy-localization"], function (
             return result;
         });
     };
-    return { analyze };
+    return { analyze, createIndex, findParentIssue, getSeeds, errorDetail };
 });

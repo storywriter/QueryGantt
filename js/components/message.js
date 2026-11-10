@@ -1,7 +1,7 @@
 define([
     "knockout",
-    "services/hierarchy-localization"
-], function (ko, localization) {
+    "services/hierarchy-diagnostics"
+], function (ko, diagnostics) {
     //#region [ Constructors ]
     
     /**
@@ -13,11 +13,11 @@ define([
         console.debug("Message()");
 
         this.text = ko.isObservable(args.text) ? args.text : ko.observable(args.text || "");
-        this.action = ko.isObservable(args.action) ? args.action : ko.observable(null);
-        this.busy = ko.isObservable(args.busy) ? args.busy : ko.observable(false);
-        this.analysis = ko.isObservable(args.analysis) ? args.analysis : ko.observable(null);
-        this.culture = localization.normalize(ko.unwrap(args.culture));
-        this.label = (key, values) => localization.text(this.culture, key, values);
+        this.diagnostics = diagnostics.create(this.text, args.context);
+        this.action = this.diagnostics.action;
+        this.busy = this.diagnostics.busy;
+        this.analysis = this.diagnostics.analysis;
+        this.label = this.diagnostics.label;
     };
 
     //#endregion
@@ -48,6 +48,7 @@ define([
      * Dispose.
      */
     Message.prototype.dispose = function () {
+        this.diagnostics.dispose();
         console.log("~Message()");
     };
 
@@ -120,7 +121,7 @@ define([
                             </li>
                         </ul>
                         <ul data-bind="foreach: warnings"><li data-bind="text: $data"></li></ul>
-                        <details>
+                        <details data-bind="visible: traces.length">
                             <summary data-bind="text: $component.label('checkedChains')"></summary>
                             <ul data-bind="foreach: traces">
                                 <li>

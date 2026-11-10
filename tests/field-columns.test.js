@@ -83,7 +83,6 @@ const loadTimelineHelpers = function () {
                 knockout: timelineKnockout,
                 "services/date-granularity": {},
                 "services/field-columns": service,
-                "services/hierarchy-analysis": {},
                 "services/timeline-split": {},
                 "services/timeline-zoom": {},
                 "vis-timeline": {},

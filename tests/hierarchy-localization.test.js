@@ -20,7 +20,7 @@ const keys = [
     "analyze", "analyzing", "dismiss", "checkedChains", "openItem", "found", "incomplete", "none", "failed",
     "sameCategory", "reversedParent", "parentCycle", "finding", "chainFrom", "itemLimit", "missingItem",
     "ambiguousParent", "accessDenied", "notFound", "lookupFailed", "lookupRetry", "lookupDetail", "warning", "crossProject",
-    "unknownCategory", "timeLimit", "reorderFailed"
+    "unknownCategory", "timeLimit", "categoryFailed", "missingProject"
 ];
 const values = { id: 10, child: "#10 (Epic)", parent: "#40 (User Story)", childId: 10, parentId: 40, reason: "example", detail: "example" };
 for (const key of keys) {

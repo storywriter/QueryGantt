@@ -17,16 +17,32 @@ The browser suite checks the real timeline and source LESS across multiple
 one-second resize polls, including hidden-tab startup, out-of-range child items,
 page scrolling, collapse/expand, and narrower host widths.
 
-# Parent-link analysis language
+# Parent-link analysis
 
-The rejected-move analysis uses the Azure DevOps user's page culture from
+On a backlog-reorder error, choose **Analyze Parent links** to read the named
+work items and their current Parent chains. Analysis is read-only and starts
+only on request; it never edits links, ranks, or work items. Confirmed findings
+identify both ends of same-category links, reversed category links, and cycles.
+Unknown categories, other projects, unreadable items, and time/item limits are
+reported as incomplete checks rather than proof of a valid hierarchy. Skipped
+higher backlog levels alone are not classified as invalid.
+
+The message component owns the diagnostic state and loads current team category
+metadata independently of the reorder implementation. The feature can therefore
+be reviewed separately from backlog drag-and-drop. It expands current fields
+and relations without a field selector, using the REST enum name `all`. Lookup
+failures show the HTTP status and original server detail. Successful reads show
+paths and links to the actual work item's project; an empty path section is hidden.
+
+Labels use the Azure DevOps user's page culture from
 `SDK.getPageContext().globalization.culture`, read after `SDK.ready()`.
-Japanese (`ja` and `ja-*`) selects Japanese buttons, results, warnings, and
-Parent-chain labels; other or unavailable cultures fall back to English.
-The browser language does not override this setting. Reopen the tab after
-changing the Azure DevOps language. Work Item IDs, process-specific type names,
-and server error details retain their original values.
+Japanese (`ja` and `ja-*`) selects Japanese; other or unavailable cultures fall
+back to English. Browser language does not override this setting. Reopen the
+tab after changing the Azure DevOps language. IDs, process type names, and
+original server errors retain their original values.
 
-The Node regression suites cover both languages and failure paths. The browser
-suite mounts the actual message component using the application's template and
-deliberately sets a browser language different from the host culture.
+`npm test` includes the pinned SDK's actual URL serializer and synthetic REST
+responses, both languages, partial failures, cycles, cancellation, and bounds.
+`npm run test:browser` exercises the actual message component with host and
+browser languages deliberately different. These checks do not replace a VSIX
+smoke test in Azure DevOps.

@@ -10,8 +10,6 @@ define([
     "api/Work/index",
     "services/data",
     "services/backlog-order",
-    "services/hierarchy-analysis",
-    "services/hierarchy-localization",
     "services/browser-settings",
     "services/date-granularity",
     "services/field-columns",
@@ -23,7 +21,7 @@ define([
     "my/components/message",
     "my/components/filter",
     "my/components/zerodata"
-], function (module, require, polyfills, ko, bindings, sdk, api, witApi, workApi, dataService, backlogOrderService, hierarchyAnalysisService, hierarchyLocalization, browserSettingsService, dateGranularityService, fieldColumnsService, timelineZoomService, timelineSplitService, iconService) {
+], function (module, require, polyfills, ko, bindings, sdk, api, witApi, workApi, dataService, backlogOrderService, browserSettingsService, dateGranularityService, fieldColumnsService, timelineZoomService, timelineSplitService, iconService) {
     //#region [ Fields ]
 
     const global = (function () { return this; })();
@@ -45,7 +43,6 @@ define([
 
         this.version = args.version;
         this.user = args.user;
-        this.analysisCulture = hierarchyLocalization.normalize(args.culture);
         this.project = args.project;
         this.team = args.team;
         this.query = args.query;
@@ -121,16 +118,8 @@ define([
         this.queryType = ko.observable("");
 
         this.message = ko.observable("");
-        this.messageAction = ko.observable(null);
-        this.messageActionBusy = ko.observable(false);
-        this.messageAnalysis = ko.observable(null);
-        this._backlogAnalysisContext = null;
-        this._messageSubscription = this.message.subscribe(() => {
-            this._backlogAnalysisContext = null;
-            this.messageAction(null);
-            this.messageActionBusy(false);
-            this.messageAnalysis(null);
-        });
+        this.messageContext = ko.observable(null);
+        this._messageSubscription = this.message.subscribe(() => this.messageContext(null));
 
         this._timeline_expandAction = ko.observable();
         this._timeline_collapseAction = ko.observable();
@@ -566,7 +555,7 @@ define([
         const client = api.getClient(workApi.WorkRestClient);
         const fail = (failedPlan, error, items) => {
             const detail = this._getBacklogErrorMessage(error);
-            const message = hierarchyLocalization.text(this.analysisCulture, "reorderFailed", { id: failedPlan.operation.ids[0] }) + (detail ? " " + detail : "");
+            const message = `Unable to reorder work item #${failedPlan.operation.ids[0]}.` + (detail ? " " + detail : "");
             this._showBacklogFailure(message, failedPlan, items);
             console.warn(`App : reorderWit() : Unable to reorder work item #${failedPlan.operation.ids[0]}.`);
             console.warn(error);
@@ -577,9 +566,8 @@ define([
             .then((serverResults) => {
                 try {
                     this._applyBacklogMove(currentPlan, items.dragged, items.target, serverResults);
-                    if (this._backlogAnalysisContext) {
-                        this.message("");
-                    }
+                    if (this.message() === this._backlogFailureMessage) this.message("");
+                    this._backlogFailureMessage = null;
                     return true;
                 }
                 catch (error) {
@@ -1050,7 +1038,6 @@ define([
         this.isTotalCompletedWorkVisible.dispose();
         this._orderModeSubscribe.dispose();
         this._messageSubscription.dispose();
-        this._backlogAnalysisContext = null;
     };
 
     //#endregion
@@ -1168,62 +1155,18 @@ define([
 
 
     /**
-     * Keeps the failed move's endpoints available for a user-requested analysis.
+     * Replaces the previous failure even when Azure returns identical text.
      */
     Model.prototype._showBacklogFailure = function (message, plan, items) {
-        this._backlogAnalysisContext = null;
-        this.messageActionBusy(false);
-        this.messageAnalysis(null);
+        this.message("");
         this.message(message);
+        this._backlogFailureMessage = message;
         const operation = plan.operation || {};
-        const ids = [
-            items.dragged && (items.dragged.originalId || items.dragged.id),
-            items.target && (items.target.originalId || items.target.id),
-            ...(operation.ids || []), operation.parentId, operation.previousId, operation.nextId,
-            ...((message || "").match(/(?:work item|作業項目|作業アイテム)\s*#?\d+/gi) || []).map((value) => value.match(/\d+/)[0])
-        ].map(Number).filter((id) => Number.isInteger(id) && id > 0);
-        this._backlogAnalysisContext = { ids: [...new Set(ids)].slice(0, 20) };
-        this.messageAction(ids.length ? this.analyzeBacklogFailure.bind(this) : null);
-    };
-
-
-    Model.prototype.analyzeBacklogFailure = function () {
-        const context = this._backlogAnalysisContext;
-        if (!context || this.messageActionBusy()) {
-            return Promise.resolve(false);
-        }
-        this.messageActionBusy(true);
-        this.messageAnalysis(null);
-        const url = (id) => this.path + encodeURIComponent(this.project.name || this.project.id) + "/_workitems/edit/" + id;
-        return Promise.resolve().then(() => hierarchyAnalysisService.analyze({
-            ids: context.ids,
-            client: api.getClient(witApi.WorkItemTrackingRestClient),
-            projectName: this.project.name,
-            index: this.backlogIndex(),
-            culture: this.analysisCulture,
-            isCancelled: () => this._backlogAnalysisContext !== context
-        })).then((result) => {
-            if (this._backlogAnalysisContext !== context) {
-                return false;
-            }
-            result.findings.forEach((finding) => {
-                finding.childUrl = url(finding.child);
-                finding.parentUrl = url(finding.parent);
-            });
-            result.traces.forEach((trace) => trace.items.forEach((item) => { item.url = url(item.id); }));
-            this.messageAnalysis(result);
-            this.messageActionBusy(false);
-            return true;
-        }, () => {
-            if (this._backlogAnalysisContext === context) {
-                this.messageAnalysis({
-                    summary: hierarchyLocalization.text(this.analysisCulture, "failed"),
-                    findings: [], traces: [], warnings: []
-                });
-                this.messageActionBusy(false);
-            }
-            return false;
-        });
+        // Preserve structured error context for message consumers without
+        // requiring them to reconstruct the failed gesture from server text.
+        this.messageContext({ workItemIds: [items.dragged && items.dragged.originalId,
+            items.target && items.target.originalId, ...(operation.ids || []),
+            operation.parentId, operation.previousId, operation.nextId] });
     };
 
 
@@ -1887,7 +1830,6 @@ define([
                     priorities: cnf.priorities,
                     fields: cnf.fields,
                     user: sdk.getUser().displayName,
-                    culture: hierarchyLocalization.getLanguage(sdk),
                     project: project,
                     team,
                     query,
